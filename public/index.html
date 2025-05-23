@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Clone - Choose Your Mode</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #87CEEB 0%, #6B9FE8 50%, #4682B4 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        
+        .container {
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            max-width: 600px;
+            width: 90%;
+        }
+        
+        .title {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+        
+        .mode-buttons {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .mode-button {
+            flex: 1;
+            min-width: 200px;
+            padding: 20px;
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+            border: none;
+            border-radius: 15px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .mode-button.advanced {
+            background: linear-gradient(145deg, #2196F3, #1976D2);
+        }
+        
+        .mode-button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        
+        .mode-icon {
+            font-size: 2em;
+        }
+        
+        .mode-title {
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+        
+        .mode-desc {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .debug-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .debug-button {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            color: white;
+            text-decoration: none;
+            margin: 0 10px;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+        
+        .debug-button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 600px) {
+            .mode-buttons {
+                flex-direction: column;
+            }
+            
+            .title {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title">🎮 Minecraft Clone</div>
+        <div class="subtitle">Choose your gaming experience</div>
+        
+        <div class="mode-buttons">
+            <a href="/" class="mode-button advanced">
+                <div class="mode-icon">🌟</div>
+                <div class="mode-title">3D Mode</div>
+                <div class="mode-desc">Full 3D voxel world with WebGL<br>Advanced graphics & effects</div>
+            </a>
+            
+            <a href="/?mode=2d" class="mode-button">
+                <div class="mode-icon">🎯</div>
+                <div class="mode-title">2D Mode</div>
+                <div class="mode-desc">Classic 2D gameplay<br>Compatible with all browsers</div>
+            </a>
+        </div>
+        
+        <div class="status" id="browserStatus">
+            <div id="statusText">Checking browser compatibility...</div>
+        </div>
+        
+        <div class="debug-section">
+            <strong>Having issues?</strong><br>
+            <a href="/test.html" class="debug-button">🔍 Debug Test</a>
+            <a href="https://github.com" class="debug-button">📖 Help</a>
+        </div>
+    </div>
+
+    <script>
+        // Check browser compatibility
+        function checkBrowserSupport() {
+            const statusEl = document.getElementById('statusText');
+            const checks = [];
+            
+            // WebGL check
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            checks.push({
+                name: 'WebGL',
+                supported: !!gl,
+                required: '3D Mode'
+            });
+            
+            // ES6 Modules check
+            const supportsModules = 'noModule' in HTMLScriptElement.prototype;
+            checks.push({
+                name: 'ES6 Modules',
+                supported: supportsModules,
+                required: '3D Mode'
+            });
+            
+            // Canvas 2D check
+            const ctx2d = canvas.getContext('2d');
+            checks.push({
+                name: 'Canvas 2D',
+                supported: !!ctx2d,
+                required: '2D Mode'
+            });
+            
+            // Local Storage check
+            let hasLocalStorage = false;
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+                hasLocalStorage = true;
+            } catch(e) {}
+            
+            checks.push({
+                name: 'Local Storage',
+                supported: hasLocalStorage,
+                required: 'Both modes'
+            });
+            
+            // Display results
+            const webglSupported = checks[0].supported;
+            const modulesSupported = checks[1].supported;
+            
+            if (webglSupported && modulesSupported) {
+                statusEl.innerHTML = '✅ Your browser supports both 3D and 2D modes!';
+                statusEl.style.background = 'rgba(76, 175, 80, 0.3)';
+            } else if (checks[2].supported) {
+                statusEl.innerHTML = '⚠️ 3D mode may not work. 2D mode is recommended.';
+                statusEl.style.background = 'rgba(255, 193, 7, 0.3)';
+            } else {
+                statusEl.innerHTML = '❌ Browser compatibility issues detected.';
+                statusEl.style.background = 'rgba(244, 67, 54, 0.3)';
+            }
+            
+            // Add detailed breakdown
+            const details = checks.map(check => 
+                `${check.supported ? '✅' : '❌'} ${check.name} (${check.required})`
+            ).join('<br>');
+            
+            statusEl.innerHTML += `<br><br><small>${details}</small>`;
+        }
+        
+        // Run compatibility check when page loads
+        document.addEventListener('DOMContentLoaded', checkBrowserSupport);
+        
+        // Add click tracking
+        document.querySelectorAll('.mode-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const mode = button.href.includes('2d') ? '2D' : '3D';
+                console.log(`User selected ${mode} mode`);
+            });
+        });
+    </script>
+</body>
+</html>

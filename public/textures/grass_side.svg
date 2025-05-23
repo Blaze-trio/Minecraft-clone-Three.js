@@ -1,0 +1,13 @@
+<!-- Simple SVG placeholder for grass side texture -->
+<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+  <rect width="16" height="2" fill="#7CBD47"/>
+  <rect y="2" width="16" height="14" fill="#8B4513"/>
+  <rect x="1" y="3" width="2" height="2" fill="#7A3F0F"/>
+  <rect x="5" y="4" width="2" height="2" fill="#7A3F0F"/>
+  <rect x="9" y="3" width="2" height="2" fill="#7A3F0F"/>
+  <rect x="13" y="5" width="2" height="2" fill="#7A3F0F"/>
+  <rect x="3" y="7" width="2" height="2" fill="#7A3F0F"/>
+  <rect x="11" y="8" width="2" height="2" fill="#7A3F0F"/>
+  <rect x="6" y="10" width="2" height="2" fill="#7A3F0F"/>
+  <rect x="1" y="12" width="2" height="2" fill="#7A3F0F"/>
+</svg>
