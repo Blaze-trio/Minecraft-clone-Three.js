@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GameErrorBoundary } from './components/GameHelpers';
 import SimpleMinecraftGame from './components/SimpleMinecraftGame';
-import GameWorld3D from './components/GameWorld3D';
+import { HighPerformanceWorld } from './components/HighPerformanceWorld';
 import './App.css';
 
 function App() {
@@ -27,6 +27,59 @@ function App() {
       return;
     }
 
+    // Add event handlers for WebGL context loss at the app level
+    const handleContextLost = () => {
+      console.error('App level: WebGL context was lost!');
+      // Don't immediately fall back - the context manager will try to recover
+    };
+    
+    const handleContextRestored = () => {
+      console.log('App level: WebGL context was restored successfully!');
+    };
+    
+    // Find any canvas elements and add listeners
+    const setupContextLossHandlers = () => {
+      const canvasElements = document.querySelectorAll('canvas');
+      canvasElements.forEach(canvas => {
+        canvas.addEventListener('webglcontextlost', handleContextLost);
+        canvas.addEventListener('webglcontextrestored', handleContextRestored);
+      });
+    };
+    
+    // Call once and set up a mutation observer to watch for new canvases
+    setupContextLossHandlers();
+    
+    // Set up observer to watch for new canvas elements
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        if (mutation.addedNodes) {
+          mutation.addedNodes.forEach(node => {
+            if (node.nodeName === 'CANVAS') {
+              setupContextLossHandlers();
+            }
+          });
+        }
+      });
+    });
+    
+    // Start observing
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    // Clean up
+    return () => {
+      const canvasElements = document.querySelectorAll('canvas');
+      canvasElements.forEach(canvas => {
+        canvas.removeEventListener('webglcontextlost', handleContextLost);
+        canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      });
+      observer.disconnect();
+    };
+  }, [force2D]);
+
+  // Test 3D support separately
+  useEffect(() => {
+    if (force2D) return;
+    
     const test3DSupport = async () => {
       try {
         console.log('Testing 3D support...');
@@ -99,8 +152,8 @@ function App() {
     );
   }
 
-  // Try to load 3D version
-  console.log('Attempting to render 3D mode');
+  // Try to load high-performance 3D version
+  console.log('Attempting to render high-performance 3D mode');
   return (
     <div style={{ 
       width: '100vw', 
@@ -111,7 +164,7 @@ function App() {
       background: '#87CEEB'
     }}>
       <GameErrorBoundary>
-        <GameWorld3D />
+        <HighPerformanceWorld />
       </GameErrorBoundary>
     </div>
   );

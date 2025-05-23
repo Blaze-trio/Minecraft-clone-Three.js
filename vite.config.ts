@@ -9,12 +9,15 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     headers: {
-      'Cross-Origin-Embedder-Policy': 'cross-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Opener-Policy': 'same-origin'
     },
     fs: {
       strict: false
     }
+  },
+  worker: {
+    format: 'es',
   },
   optimizeDeps: {
     force: true,
