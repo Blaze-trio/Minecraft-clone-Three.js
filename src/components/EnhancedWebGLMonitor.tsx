@@ -1,6 +1,6 @@
 // Enhanced WebGL Performance Monitor with Aggressive Context Loss Prevention
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
-import { useEffect, useRef, useCallback } from 'react';
 import { 
   checkWebGLMemoryStatus, 
   emergencyMemoryCleanup, 
@@ -42,6 +42,8 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
   const aggressiveModeActive = useRef(false);
   const cleanupCooldown = useRef(false);
   const contextLossPreventionActive = useRef(false);
+  const frameCount = useRef(0);
+  const memoryHistory = useRef<number[]>([]);
 
   // Emergency cleanup function with callbacks
   const performEmergencyCleanup = useCallback(() => {
@@ -64,24 +66,73 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
 
   // Progressive performance monitoring
   useFrame((_state, delta) => {
+    frameCount.current++;
+    
     if (!gl || !gl.info) return;
-
-    const fps = 1 / Math.max(delta, 0.001);
-    const memoryStatus = checkWebGLMemoryStatus(gl);
-    memoryStatsRef.current = memoryStatus;
-
-    // Update HUD with current memory stats
+    
+    const info = gl.info;
+    const memory = info.memory || {};
+    const render = info.render || {};
+    
+    const geometries = memory.geometries || 0;
+    const textures = memory.textures || 0;
+    const calls = render.calls || 0;
+    
+    // Track memory usage
+    memoryHistory.current.push(geometries);
+    if (memoryHistory.current.length > 20) {
+      memoryHistory.current.shift();
+    }
+    
+    // Determine risk level
+    let risk: 'low' | 'medium' | 'high' | 'critical' = 'low';
+    if (geometries > 20000) risk = 'critical';
+    else if (geometries > 15000) risk = 'high';
+    else if (geometries > 10000) risk = 'medium';
+    
+    // Update HUD with memory status
     setHUDData(prev => ({
       ...prev,
       webglMemoryStatus: {
-        geometries: memoryStatus.geometries || 0,
-        textures: memoryStatus.textures || 0,
-        calls: memoryStatus.calls || 0,
-        risk: memoryStatus.risk
+        geometries,
+        textures,
+        calls,
+        risk
       }
     }));
+    
+    // Performance alerts
+    if (risk === 'critical' && onPerformanceAlert) {
+      onPerformanceAlert('critical');
+    }
+    
+    // Emergency cleanup if memory is too high
+    const now = Date.now();
+    if (geometries > 25000 && now - lastCleanup.current > 10000) {
+      console.warn('EnhancedWebGLMonitor: Emergency cleanup triggered');
+      
+      // Simple cleanup
+      if (scene) {
+        let cleanedCount = 0;
+        scene.traverse((object) => {
+          if (object.userData?.priority === 'low') {
+            if (object.parent) {
+              object.parent.remove(object);
+              cleanedCount++;
+            }
+          }
+        });
+        
+        if (onEmergencyCleanup) {
+          onEmergencyCleanup(cleanedCount);
+        }
+      }
+      
+      lastCleanup.current = now;
+    }
 
     // Track FPS trends for more responsive action
+    const fps = 1 / Math.max(delta, 0.001);
     if (fps < 15) {
       consecutiveLowFrames.current++;
       consecutiveHighFrames.current = 0;
@@ -95,7 +146,7 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
     }
 
     // CRITICAL: Immediate context loss prevention
-    if (memoryStatus.geometries > VOXEL_MEMORY_CONFIG.MAX_GEOMETRY_COUNT) {
+    if (memoryStatsRef.current.geometries > VOXEL_MEMORY_CONFIG.MAX_GEOMETRY_COUNT) {
       if (!contextLossPreventionActive.current) {
         contextLossPreventionActive.current = true;
         console.error('🚨 CRITICAL: Geometry count exceeded maximum! Initiating emergency protocols...');
@@ -112,7 +163,7 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
         // Dispatch global emergency event for other systems to respond
         window.dispatchEvent(new CustomEvent('webgl-emergency-mode', {
           detail: { 
-            geometries: memoryStatus.geometries,
+            geometries: memoryStatsRef.current.geometries,
             action: 'emergency-cleanup-initiated',
             cleaned 
           }
@@ -127,7 +178,7 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
     }
 
     // HIGH RISK: Aggressive prevention measures
-    if (memoryStatus.geometries > VOXEL_MEMORY_CONFIG.DANGER_GEOMETRY_COUNT || memoryStatus.risk === 'high') {
+    if (memoryStatsRef.current.geometries > VOXEL_MEMORY_CONFIG.DANGER_GEOMETRY_COUNT || memoryStatsRef.current.risk === 'high') {
       if (!aggressiveModeActive.current) {
         aggressiveModeActive.current = true;
         console.warn('⚠️ HIGH RISK: Entering aggressive optimization mode');
@@ -138,8 +189,8 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
         
         window.dispatchEvent(new CustomEvent('webgl-high-memory-pressure', {
           detail: { 
-            geometries: memoryStatus.geometries,
-            risk: memoryStatus.risk
+            geometries: memoryStatsRef.current.geometries,
+            risk: memoryStatsRef.current.risk
           }
         }));
       }
@@ -153,7 +204,7 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
       }
     } 
     // MEDIUM RISK: Preventive measures
-    else if (memoryStatus.geometries > VOXEL_MEMORY_CONFIG.WARNING_GEOMETRY_COUNT || memoryStatus.risk === 'medium') {
+    else if (memoryStatsRef.current.geometries > VOXEL_MEMORY_CONFIG.WARNING_GEOMETRY_COUNT || memoryStatsRef.current.risk === 'medium') {
       if (onPerformanceAlert) onPerformanceAlert('warning');
       
       // Less aggressive cleanup on longer intervals
@@ -165,14 +216,14 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
       }
     }
     // LOW RISK: Reset aggressive mode
-    else if (memoryStatus.risk === 'low' && aggressiveModeActive.current) {
+    else if (memoryStatsRef.current.risk === 'low' && aggressiveModeActive.current) {
       // Only reset if we've had good performance for a while
       if (consecutiveHighFrames.current > 120) { // 2 seconds of good FPS
         aggressiveModeActive.current = false;
         console.log('✅ LOW RISK: Exiting aggressive optimization mode');
         
         window.dispatchEvent(new CustomEvent('webgl-memory-normal', {
-          detail: { geometries: memoryStatus.geometries }
+          detail: { geometries: memoryStatsRef.current.geometries }
         }));
       }
     }

@@ -102,41 +102,12 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
       
       // Reset recovery flag
       isRecovering.current = false;
-      
-      // Notify parent that context was restored
+        // Notify parent that context was restored
       if (onContextRestored) {
         onContextRestored();
       }
       
-      // Reinitialize renderer with optimized settings
-      try {
-        // Set conservative rendering parameters
-        gl.setPixelRatio(Math.min(window.devicePixelRatio, 1));
-        gl.shadowMap.enabled = false;
-        gl.shadowMap.autoUpdate = false;
-        
-        // Notify parent that context was restored
-        if (onContextRestored) {
-          onContextRestored();
-        }
-      } catch (err) {
-        console.warn('Error reinitializing renderer after context restore:', err);
-      }
-      
-      // Reinitialize renderer with optimized settings
-      try {
-        // Set conservative rendering parameters
-        gl.setPixelRatio(Math.min(window.devicePixelRatio, 1));
-        gl.shadowMap.enabled = false;
-        gl.shadowMap.autoUpdate = false;
-        
-        // Force a clear to ensure proper state
-        gl.clear();
-      } catch (err) {
-        console.warn('Error reinitializing renderer after context restore:', err);
-      }
-      
-      // Reinitialize renderer with optimized settings
+      // Reinitialize renderer with optimized settings (only once)
       try {
         // Set conservative rendering parameters
         gl.setPixelRatio(Math.min(window.devicePixelRatio, 1));

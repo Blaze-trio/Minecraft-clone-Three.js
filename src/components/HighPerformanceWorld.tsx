@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, Suspense } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
-import { ImprovedWorldGenerator } from '../utils/improvedWorldGenerator';
+import { ImprovedWorldGenerator } from '../utils/cleanGenerator';
 import { PlayerController } from './PlayerController';
-import { ChunkLOD } from './ChunkLOD';
 import { HUDUpdater, useHUDState, GameHUD, Crosshair, ControlsHint } from './GameHUD';
 import { WebGLContextManager, MemoryManager } from './WebGLContextManager';
 import { EnhancedWebGLMonitor } from './EnhancedWebGLMonitor';
+import { ChunkComponent } from './Block';
 import type { Chunk } from '../types/game';
 import { RENDER_DISTANCE, MAX_RENDER_DISTANCE, CHUNK_SIZE } from '../types/game';
 import * as THREE from 'three';
@@ -38,7 +38,8 @@ const useChunkWorker = () => {
               processQueue();
               break;
               
-            case 'CHUNK_GENERATED':              const { chunk, id } = data as { chunk: Chunk, id: string };
+            case 'CHUNK_GENERATED':
+              const { chunk, id } = data as { chunk: Chunk, id: string };
               addChunk(chunk, id);
               break;
               
@@ -123,7 +124,8 @@ const useChunkWorker = () => {
   }, [processQueue]);
   
   // Initialize and use fallback generator
-  const useFallbackGenerator = useCallback(() => {    if (!fallbackGenerator.current) {
+  const useFallbackGenerator = useCallback(() => {
+    if (!fallbackGenerator.current) {
       fallbackGenerator.current = new ImprovedWorldGenerator();
     }
     
@@ -395,12 +397,13 @@ const useChunkVisibility = (
 };
 
 // Optimized version of the world renderer
-const WorldRenderer: React.FC = () => {  // State for player position and chunks
-  const [playerPosition, setPlayerPosition] = useState<[number, number, number]>([0, 5, 0]); // Start closer to ground
+const WorldRenderer: React.FC = () => {
+  // State for player position and chunks
+  const [playerPosition, setPlayerPosition] = useState<[number, number, number]>([0, 5, 0]);
   const { chunks, queueChunk } = useChunkWorker();
   const { renderDistance } = useAdaptivePerformance();
   
-  // Update HUD data - use only setHUDData to avoid unused variable warnings
+  // Update HUD data
   const { setHUDData } = useHUDState();
   
   // Get visible chunks based on player position and frustum
@@ -435,7 +438,8 @@ const WorldRenderer: React.FC = () => {  // State for player position and chunks
       queueChunk(x, z);
     });
   }, [playerPosition, renderDistance, queueChunk]);
-    // Update HUD data
+  
+  // Update HUD data
   useEffect(() => {
     setHUDData(prev => ({
       ...prev,
@@ -457,48 +461,50 @@ const WorldRenderer: React.FC = () => {  // State for player position and chunks
       <PlayerController
         position={playerPosition}
         onPositionChange={handlePlayerMove}
-      />      {/* CAUTIOUSLY RE-ENABLE: Chunk rendering with extreme geometry limits */}
-      {visibleChunks.slice(0, 3).map((chunk) => ( // Limit to 3 chunks initially
-        <ChunkLOD
-          key={`chunk-${chunk.x}-${chunk.z}`}
-          chunk={chunk}
-          playerPosition={playerPosition}
-          chunkX={chunk.x}
-          chunkZ={chunk.z}
-        />      ))}
+      />
 
-      {/* Basic lighting only */}
+      {/* RE-ENABLE: Chunk rendering */}
+      {visibleChunks.map((chunk) => (
+        <ChunkComponent
+          key={`${chunk.x}-${chunk.z}`}
+          blocks={chunk.blocks}
+          chunkKey={`${chunk.x}-${chunk.z}`}
+        />
+      ))}
+
+      {/* RE-ENABLE: All managers and monitors */}
+      <HUDUpdater 
+        setHUDData={setHUDData}
+        playerPosition={playerPosition} 
+        renderDistance={renderDistance} 
+        visibleChunks={visibleChunks.length}
+        totalChunks={chunks.size}          
+      />
+
+      <WebGLContextManager 
+        setHUDData={setHUDData}
+        onContextLost={() => console.log("Main context lost event handled")}
+        onContextRestored={() => console.log("Main context restored event handled")}
+      />
+
+      <MemoryManager />
+
+      <EnhancedWebGLMonitor 
+        setHUDData={setHUDData}
+        onEmergencyCleanup={(count) => console.log(`Enhanced monitor cleaned ${count} objects`)}
+        onPerformanceAlert={(level) => console.warn(`Performance alert: ${level}`)}
+      />
+
+      {/* Basic lighting */}
       <ambientLight intensity={0.5} />
       <directionalLight 
         position={[100, 100, 100]} 
         intensity={0.8} 
         castShadow={false} 
-      />      {/* Enhanced simple sky background with gradient effect */}
-      <mesh position={[0, 100, -500]}>
-        <planeGeometry args={[2000, 2000]} />
-        <meshBasicMaterial color="#87CEEB" side={THREE.DoubleSide} />
-      </mesh>
-      
-      {/* Simple ground plane with grass color - Fixed Z-fighting by adjusting Y position */}
-      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[500, 500]} />
-        <meshLambertMaterial color="#4CAF50" />
-      </mesh>
-      
-      {/* Ground base layer positioned below grass layer to prevent Z-fighting */}
-      <mesh position={[0, -1, 0]}>
-        <boxGeometry args={[500, 2, 500]} />
-        <meshLambertMaterial color="#8B4513" />
-      </mesh>
-      
-      {/* Test cube to verify rendering works */}
-      <mesh position={[0, 2, 0]}>
-        <boxGeometry args={[2, 2, 2]} />
-        <meshBasicMaterial color="red" />
-      </mesh>{/* Debug logger to track geometry count */}
+      />
+
+      {/* Debug logger */}
       <DebugLogger />
-        {/* DISABLE: Sky component - TESTING IF THIS CAUSES GEOMETRY EXPLOSION */}
-      {/* <Sky sunPosition={[100, 20, 100]} /> */}
     </>
   );
 };
@@ -510,9 +516,9 @@ const DebugLogger: React.FC = () => {
   const hasLogged = useRef(false);
   const geometryHistory = useRef<number[]>([]);  // Log immediately on mount
   useEffect(() => {
-    console.log('🔍 ULTRA-MINIMAL SCENE TEST - All monitoring systems disabled');
-    console.log('📊 Expected: 2 planes + 1 cube + PlayerController = ~3-5 geometries MAX');
-    console.log('🎯 If we still see 1000+ geometries, the issue is in React Three Fiber itself');
+    console.log('🔍 ABSOLUTE MINIMAL SCENE TEST - Everything disabled except lights');
+    console.log('📊 Expected: ONLY lighting (ambient + directional) = 0 geometries');
+    console.log('🎯 If we STILL see geometries, React Three Fiber has a fundamental issue');
   }, []);
   
   useFrame(() => {
@@ -579,14 +585,13 @@ const DebugLogger: React.FC = () => {
         <div>Time: ${timeElapsed.toFixed(0)}s</div>
         <div>Status: ${status}</div>
         <div>Geometries: ${geometries}</div>
-        <div>FPS: ~${(frameCount.current / timeElapsed).toFixed(0)}</div>        <div style="margin-top:5px; font-size:10px;">
-          <div>🚫 Sky: DISABLED</div>
-          <div>🚫 Chunks: DISABLED</div>
-          <div>🚫 WebGLMgr: DISABLED</div>
-          <div>🚫 MemoryMgr: DISABLED</div>
-          <div>🚫 Monitor: DISABLED</div>
-          <div style="color:red;">⚡ ULTRA-MINIMAL TEST</div>
-        </div>
+        <div>FPS: ~${(frameCount.current / timeElapsed).toFixed(0)}</div>          <div style="margin-top:5px; font-size:10px;">
+            <div>🚫 ALL MESHES: DISABLED</div>
+            <div>🚫 ALL CHUNKS: DISABLED</div>
+            <div>🚫 ALL MANAGERS: DISABLED</div>
+            <div style="color:red;">⚡ ABSOLUTE MINIMAL TEST</div>
+            <div style="color:orange;">Only Lights + PlayerController</div>
+          </div>
       `;
     }    // Emergency detection: if geometries explode in ULTRA-minimal scene
     if (geometries > 100) {
@@ -785,34 +790,16 @@ export const HighPerformanceWorld: React.FC = () => {
         }}
       >        <Suspense fallback={null}>
           <WorldRenderer />
-          <HUDUpdater 
-            setHUDData={setHUDData}
-            playerPosition={[0, 50, 0]} 
-            renderDistance={RENDER_DISTANCE} 
-            visibleChunks={0}
-            totalChunks={0}          />
-
-          {/* STEP 2: Re-enable WebGLContextManager - Should add 0 geometries */}
-          <WebGLContextManager 
-            setHUDData={setHUDData}
-            onContextLost={() => console.log("Main context lost event handled")}
-            onContextRestored={() => console.log("Main context restored event handled")}
-          />          {/* STEP 3: Re-enable MemoryManager - Should add 0 geometries */}          <MemoryManager />
-
-          {/* STEP 4: Re-enable EnhancedWebGLMonitor - Should add 0 geometries */}
-          <EnhancedWebGLMonitor 
-            setHUDData={setHUDData}
-            onEmergencyCleanup={(count) => console.log(`Enhanced monitor cleaned ${count} objects`)}
-            onPerformanceAlert={(level) => console.warn(`Performance alert: ${level}`)}
-          />
           <PointerLockControls />
         </Suspense>
       </Canvas>
-        {/* HUD elements outside canvas */}
+
+      {/* HUD elements outside canvas */}
       <GameHUD hudData={hudData} />
       <Crosshair />
       <ControlsHint />
-        {/* Temporary instruction overlay */}
+
+      {/* Updated instruction overlay */}
       <div style={{
         position: 'absolute',
         top: '20px',
@@ -825,17 +812,16 @@ export const HighPerformanceWorld: React.FC = () => {
         fontSize: '14px',
         zIndex: 1000
       }}>
-        <div style={{color: '#4CAF50', fontWeight: 'bold', marginBottom: '10px'}}>🎮 SYSTEMATIC RE-ENABLING COMPLETE</div>
+        <div style={{color: '#4CAF50', fontWeight: 'bold', marginBottom: '10px'}}>🎮 CHUNK RENDERING ENABLED</div>
         <div>📋 Controls:</div>
         <div>• Click canvas to enable mouse look</div>
         <div>• WASD to move</div>
         <div>• ESC to release mouse</div>
-        <div style={{marginTop: '10px', color: '#4CAF50'}}>✅ All components re-enabled successfully!</div>
-        <div style={{color: '#81C784'}}>• Step 1: HUDUpdater ✅</div>
-        <div style={{color: '#81C784'}}>• Step 2: WebGLContextManager ✅</div>
-        <div style={{color: '#81C784'}}>• Step 3: MemoryManager ✅</div>
-        <div style={{color: '#81C784'}}>• Step 4: EnhancedWebGLMonitor ✅</div>
-        <div style={{marginTop: '10px', color: '#FFA500'}}>🔬 Testing improved terrain generation...</div>
+        <div style={{marginTop: '10px', color: '#4CAF50'}}>✅ Components:</div>
+        <div style={{color: '#81C784'}}>• Chunks: ✅ RENDERING</div>
+        <div style={{color: '#81C784'}}>• HUD: ✅ ACTIVE</div>
+        <div style={{color: '#81C784'}}>• Managers: ✅ ACTIVE</div>
+        <div style={{marginTop: '10px', color: '#FFA500'}}>🔬 Testing world generation...</div>
       </div>
       
       {/* Loading overlay */}

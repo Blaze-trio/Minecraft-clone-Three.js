@@ -22,10 +22,7 @@ export interface Chunk {
   x: number;
   z: number;
   blocks: Block[];
-  mesh?: THREE.InstancedMesh;
-  isReady?: boolean; // Flag to indicate if chunk is ready to render
-  needsUpdate?: boolean; // Flag to indicate if chunk needs geometry update
-  lodLevel?: number; // Level of detail (0 = highest detail)
+  isReady: boolean;
 }
 
 export interface Player {
@@ -48,12 +45,13 @@ export const BLOCK_TYPES: BlockType[] = [
   {
     id: 0,
     name: 'Air',
-    textureTop: '',
-    textureSide: '',
-    textureBottom: '',
+    textureTop: '/textures/stone.svg',
+    textureSide: '/textures/stone.svg',
+    textureBottom: '/textures/stone.svg',
     hardness: 0,
     transparent: true,
-  },  {
+  },
+  {
     id: 1,
     name: 'Grass',
     textureTop: '/textures/grass_top.svg',
@@ -101,6 +99,5 @@ export const BLOCK_TYPES: BlockType[] = [
 ];
 
 export const CHUNK_SIZE = 16;
-export const WORLD_HEIGHT = 64;
-export const RENDER_DISTANCE = 4; // Reduced from 8 to 4 for better performance
-export const MAX_RENDER_DISTANCE = 8; // Maximum render distance for high-end devices
+export const RENDER_DISTANCE = 3;
+export const MAX_RENDER_DISTANCE = 6;

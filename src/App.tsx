@@ -3,7 +3,12 @@ import { GameErrorBoundary } from './components/GameHelpers';
 import SimpleMinecraftGame from './components/SimpleMinecraftGame';
 import { HighPerformanceWorld } from './components/HighPerformanceWorld';
 import { setupEmergencyMemoryHandlers } from './utils/webglUtils';
+import { TestGeneratorComponent } from './components/TestGeneratorComponent';
+import { CleanGeneratorTest } from './components/CleanGeneratorTest';
 import './App.css';
+
+// Added debug logging
+console.log('App module loading - testing generators');
 
 function App() {
   // Check URL parameters
@@ -295,6 +300,10 @@ function App() {
       overflow: 'hidden',
       background: '#87CEEB'
     }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 1000, width: '300px' }}>
+        <TestGeneratorComponent />
+        <CleanGeneratorTest />
+      </div>
       <GameErrorBoundary>
         <HighPerformanceWorld />
       </GameErrorBoundary>

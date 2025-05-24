@@ -1,3 +1,4 @@
+// Standard import without extension
 import type { Chunk, Block } from '../types/game';
 
 const CHUNK_SIZE = 16;
@@ -70,6 +71,12 @@ class ImprovedNoise {
 }
 
 export class ImprovedWorldGenerator {
+  // Debug flag to check if the module is loading correctly
+  private static isLoaded = (() => {
+    console.log('ImprovedWorldGenerator module loaded successfully!');
+    return true;
+  })();
+
   private heightNoise: ImprovedNoise;
   private roughnessNoise: ImprovedNoise;
   private caveNoise: ImprovedNoise;

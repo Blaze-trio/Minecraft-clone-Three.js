@@ -1,35 +1,6 @@
 import React, { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
-
-interface PlayerControllerProps {
-  position: [number, number, number];
-  onPositionChange: (position: [number, number, number]) => void;
-}
-
-// Simple collision detection for ground and basic boundaries
-const checkCollision = (position: Vector3): Vector3 => {
-  const newPos = position.clone();
-  
-  // Ground collision (minimum Y position)
-  const groundLevel = 1; // Above the ground plane
-  if (newPos.y < groundLevel) {
-    newPos.y = groundLevel;
-  }
-  
-  // Simple world boundaries to prevent player from going too far
-  const worldBounds = 200;
-  newPos.x = Math.max(-worldBounds, Math.min(worldBounds, newPos.x));
-  newPos.z = Math.max(-worldBounds, Math.min(worldBounds, newPos.z));
-  
-  // Height limit
-  const maxHeight = 100;
-  if (newPos.y > maxHeight) {
-    newPos.y = maxHeight;
-  }
-  
-  return newPos;
-};
 
 interface PlayerControllerProps {
   position: [number, number, number];
@@ -38,18 +9,41 @@ interface PlayerControllerProps {
 
 export const PlayerController: React.FC<PlayerControllerProps> = ({
   position,
-  onPositionChange,
+  onPositionChange
 }) => {
-  const velocity = useRef<Vector3>(new Vector3());
-  const keys = useRef<Set<string>>(new Set());
+  const { camera } = useThree();
+  const velocity = useRef(new Vector3());
+  const keys = useRef({
+    w: false,
+    a: false,
+    s: false,
+    d: false,
+    space: false,
+    shift: false
+  });
 
+  // Set up keyboard controls
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      keys.current.add(event.code);
+      switch (event.code) {
+        case 'KeyW': keys.current.w = true; break;
+        case 'KeyA': keys.current.a = true; break;
+        case 'KeyS': keys.current.s = true; break;
+        case 'KeyD': keys.current.d = true; break;
+        case 'Space': keys.current.space = true; event.preventDefault(); break;
+        case 'ShiftLeft': keys.current.shift = true; break;
+      }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      keys.current.delete(event.code);
+      switch (event.code) {
+        case 'KeyW': keys.current.w = false; break;
+        case 'KeyA': keys.current.a = false; break;
+        case 'KeyS': keys.current.s = false; break;
+        case 'KeyD': keys.current.d = false; break;
+        case 'Space': keys.current.space = false; break;
+        case 'ShiftLeft': keys.current.shift = false; break;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -60,62 +54,43 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
-  // Use refs to avoid unnecessary allocations
-  const tempVector = useRef(new Vector3());
-  const currentPos = useRef(new Vector3(...position));
-  const frameCount = useRef(0);
-  
+
   useFrame((state, delta) => {
-    // Limit updates to reduce CPU usage while maintaining responsiveness
-    frameCount.current++;
-    const shouldUpdatePosition = frameCount.current % 2 === 0;
-    
-    // Clamp delta to prevent jumps after tab switching
-    const clampedDelta = Math.min(delta, 0.1);
     const speed = 10;
-    
-    // Update current position from props (only if changed)
-    if (
-      currentPos.current.x !== position[0] ||
-      currentPos.current.y !== position[1] ||
-      currentPos.current.z !== position[2]
-    ) {
-      currentPos.current.set(position[0], position[1], position[2]);
-    }
+    const direction = new Vector3();
 
-    // Movement (optimized to reduce allocations)
-    velocity.current.set(0, 0, 0); // Reset velocity
-    
-    // Batch key checks to reduce operations
-    const moveForward = keys.current.has('KeyW');
-    const moveBackward = keys.current.has('KeyS');
-    const moveLeft = keys.current.has('KeyA');
-    const moveRight = keys.current.has('KeyD');
-    const moveUp = keys.current.has('Space');
-    const moveDown = keys.current.has('ShiftLeft');
-    
-    // Only calculate if keys are pressed
-    if (moveForward || moveBackward || moveLeft || moveRight || moveUp || moveDown) {
-      if (moveForward) velocity.current.z -= speed * clampedDelta;
-      if (moveBackward) velocity.current.z += speed * clampedDelta;
-      if (moveLeft) velocity.current.x -= speed * clampedDelta;
-      if (moveRight) velocity.current.x += speed * clampedDelta;
-      if (moveUp) velocity.current.y += speed * clampedDelta;
-      if (moveDown) velocity.current.y -= speed * clampedDelta;
-        // Apply velocity with collision detection
-      const newPosition = currentPos.current.clone().add(velocity.current);
-      const collisionCheckedPosition = checkCollision(newPosition);
-      currentPos.current.copy(collisionCheckedPosition);
-    
-      // Only update position state if needed to reduce React renders
-      if (shouldUpdatePosition) {
-        tempVector.current.copy(currentPos.current);
-        onPositionChange([tempVector.current.x, tempVector.current.y, tempVector.current.z]);
-      }
-    }
+    // Get camera direction
+    camera.getWorldDirection(direction);
+    direction.y = 0;
+    direction.normalize();
 
-    // Always update camera position for smooth movement
-    state.camera.position.copy(currentPos.current);
+    // Calculate right vector
+    const right = new Vector3();
+    right.crossVectors(direction, new Vector3(0, 1, 0)).normalize();
+
+    // Apply movement based on keys
+    if (keys.current.w) velocity.current.add(direction.multiplyScalar(speed * delta));
+    if (keys.current.s) velocity.current.add(direction.multiplyScalar(-speed * delta));
+    if (keys.current.a) velocity.current.add(right.multiplyScalar(-speed * delta));
+    if (keys.current.d) velocity.current.add(right.multiplyScalar(speed * delta));
+    if (keys.current.space) velocity.current.y += speed * delta;
+    if (keys.current.shift) velocity.current.y -= speed * delta;
+
+    // Apply velocity to position
+    const newPosition: [number, number, number] = [
+      position[0] + velocity.current.x,
+      position[1] + velocity.current.y,
+      position[2] + velocity.current.z
+    ];
+
+    // Update camera position
+    camera.position.set(...newPosition);
+
+    // Call position change callback
+    onPositionChange(newPosition);
+
+    // Apply damping
+    velocity.current.multiplyScalar(0.8);
   });
 
   return null;

@@ -33,6 +33,10 @@ export default defineConfig({
       target: 'es2020'
     }
   },
+  resolve: {
+    conditions: ['development', 'browser'],
+    extensions: ['.js', '.jsx', '.ts', '.tsx', '.json']
+  },
   build: {
     target: 'es2020',
     commonjsOptions: {
