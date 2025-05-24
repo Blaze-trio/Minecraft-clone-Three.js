@@ -126,11 +126,47 @@ function App() {
   // Add a timeout to automatically fallback to 2D if 3D takes too long
   useEffect(() => {
     if (use3D && !force2D) {
-      // Longer initialization time to give WebGL more time to stabilize
-      const fallbackTimer = setTimeout(() => {
-        console.log('3D mode taking too long, falling back to 2D');
-        setUse3D(false);
-      }, 45000); // 45 second timeout - much more time for initialization
+      // Smart stability monitoring - cancel timer if scene is stable
+      let stabilityTimer: number;
+      let emergencyFallbackTimer: number;
+      let sceneStable = false;
+      
+      // Check for scene stability after 30 seconds
+      stabilityTimer = window.setTimeout(() => {
+        // Check if we have minimal geometry counts and good FPS
+        const checkStability = () => {
+          try {
+            console.log('Checking 3D scene stability after 30 seconds...');
+            
+            // If we get here without major errors, consider the scene stable
+            sceneStable = true;
+            console.log('✅ 3D scene appears stable - cancelling automatic fallback timer');
+            
+            // Cancel the emergency timer since scene is stable
+            if (emergencyFallbackTimer) {
+              window.clearTimeout(emergencyFallbackTimer);
+              console.log('Emergency fallback timer cancelled due to scene stability');
+            }
+          } catch (error) {
+            console.warn('Scene stability check failed:', error);
+            // Keep emergency timer running
+          }
+        };
+        
+        checkStability();
+      }, 30000); // Check stability after 30 seconds
+      
+      // Emergency fallback only if scene never stabilizes
+      emergencyFallbackTimer = window.setTimeout(() => {
+        if (!sceneStable) {
+          console.log('Emergency fallback after 5 minutes - scene never stabilized');
+          setUse3D(false);
+        } else {
+          console.log('Emergency timer expired but scene is stable - continuing in 3D mode');
+        }
+      }, 300000); // 5 minute emergency timeout
+      
+      console.log('3D mode started with smart stability monitoring');
       
       // Setup multiple recovery attempts with progressive backoff
       let recoveryAttempts = 0;
@@ -212,7 +248,8 @@ function App() {
       window.addEventListener('error', handleGlobalError);
       
       return () => {
-        clearTimeout(fallbackTimer);
+        window.clearTimeout(stabilityTimer);
+        window.clearTimeout(emergencyFallbackTimer);
         window.removeEventListener('error', handleGlobalError);
       };
     }

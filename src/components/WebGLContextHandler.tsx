@@ -86,11 +86,18 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
       // Silently handle optimization errors
     }
   });
-  
-  useEffect(() => {
+    useEffect(() => {
     if (!gl || !gl.domElement) return;
     
     const canvas = gl.domElement;
+    
+    // Prevent duplicate initialization
+    if (canvas.dataset.webglManagerInitialized === 'true') {
+      console.log('WebGL context manager already initialized, skipping');
+      return;
+    }
+    
+    canvas.dataset.webglManagerInitialized = 'true';
     
     const handleContextLost = (event: Event) => {
       // Prevent default behavior
@@ -212,14 +219,14 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
     // Apply optimization settings
     gl.setClearColor(new THREE.Color('#87CEEB'));
     
-    console.log("WebGL context manager initialized");
-    
-    return () => {
+    console.log("WebGL context manager initialized");    return () => {
       // Remove event listeners on cleanup
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      // Clear initialization flag
+      canvas.dataset.webglManagerInitialized = 'false';
     };
-  }, [gl, onContextLost, onContextRestored, setHUDData, scene]);
+  }, [gl]); // FIXED: Removed scene, onContextLost, onContextRestored, setHUDData to prevent re-mounting loop
   
   // Monitor renderer for signs of problems
   useEffect(() => {

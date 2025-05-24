@@ -197,12 +197,11 @@ export const EnhancedWebGLMonitor: React.FC<EnhancedMonitorProps> = ({
     window.addEventListener('webgl-memory-critical', handleMemoryCritical);
     window.addEventListener('webgl-geometry-critical', handleMemoryCritical);
 
-    return () => {
-      window.removeEventListener('webgl-emergency-mode', handleEmergencyMode);
+    return () => {      window.removeEventListener('webgl-emergency-mode', handleEmergencyMode);
       window.removeEventListener('webgl-memory-critical', handleMemoryCritical);
       window.removeEventListener('webgl-geometry-critical', handleMemoryCritical);
     };
-  }, [gl, scene, performEmergencyCleanup]);
+  }, [gl]); // FIXED: Removed scene and performEmergencyCleanup to prevent re-mounting loop
 
   // Periodic health checks
   useEffect(() => {

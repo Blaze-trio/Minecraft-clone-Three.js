@@ -7,6 +7,35 @@ interface PlayerControllerProps {
   onPositionChange: (position: [number, number, number]) => void;
 }
 
+// Simple collision detection for ground and basic boundaries
+const checkCollision = (position: Vector3): Vector3 => {
+  const newPos = position.clone();
+  
+  // Ground collision (minimum Y position)
+  const groundLevel = 1; // Above the ground plane
+  if (newPos.y < groundLevel) {
+    newPos.y = groundLevel;
+  }
+  
+  // Simple world boundaries to prevent player from going too far
+  const worldBounds = 200;
+  newPos.x = Math.max(-worldBounds, Math.min(worldBounds, newPos.x));
+  newPos.z = Math.max(-worldBounds, Math.min(worldBounds, newPos.z));
+  
+  // Height limit
+  const maxHeight = 100;
+  if (newPos.y > maxHeight) {
+    newPos.y = maxHeight;
+  }
+  
+  return newPos;
+};
+
+interface PlayerControllerProps {
+  position: [number, number, number];
+  onPositionChange: (position: [number, number, number]) => void;
+}
+
 export const PlayerController: React.FC<PlayerControllerProps> = ({
   position,
   onPositionChange,
@@ -73,9 +102,10 @@ export const PlayerController: React.FC<PlayerControllerProps> = ({
       if (moveRight) velocity.current.x += speed * clampedDelta;
       if (moveUp) velocity.current.y += speed * clampedDelta;
       if (moveDown) velocity.current.y -= speed * clampedDelta;
-      
-      // Apply velocity
-      currentPos.current.add(velocity.current);
+        // Apply velocity with collision detection
+      const newPosition = currentPos.current.clone().add(velocity.current);
+      const collisionCheckedPosition = checkCollision(newPosition);
+      currentPos.current.copy(collisionCheckedPosition);
     
       // Only update position state if needed to reduce React renders
       if (shouldUpdatePosition) {
