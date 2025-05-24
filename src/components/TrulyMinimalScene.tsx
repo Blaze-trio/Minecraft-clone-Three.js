@@ -79,11 +79,10 @@ export const TrulyMinimalScene: React.FC = () => {
         <div style={{ color: '#ff6b6b', fontWeight: 'bold' }}>🔬 TRULY MINIMAL SCENE</div>
         <div style={{ marginTop: '10px' }}>
           <div>📊 Expected geometries: 0</div>
-          <div>🎯 Components: ONLY lighting</div>
-          <div>⏱️ Test duration: 3 seconds</div>
+          <div>🎯 Components: ONLY lighting</div>          <div>⏱️ Test duration: 3 seconds</div>
         </div>
         <div style={{ marginTop: '10px', fontSize: '12px', color: '#ccc' }}>
-          If geometries > 0, React Three Fiber has hidden leaks
+          If geometries {'>'} 0, React Three Fiber has hidden leaks
         </div>
       </div>
     </div>

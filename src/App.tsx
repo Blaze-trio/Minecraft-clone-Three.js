@@ -6,6 +6,9 @@ import { setupEmergencyMemoryHandlers } from './utils/webglUtils';
 import { TestGeneratorComponent } from './components/TestGeneratorComponent';
 import { CleanGeneratorTest } from './components/CleanGeneratorTest';
 import { TrulyMinimalScene } from './components/TrulyMinimalScene';
+import { AbsoluteMinimalScene } from './components/AbsoluteMinimalScene';
+import { ControlledGeometryTest } from './components/ControlledGeometryTest';
+import { RealComponentTest } from './components/RealComponentTest';
 import './App.css';
 
 // Added debug logging
@@ -306,7 +309,7 @@ function App() {
         <CleanGeneratorTest />
       </div>
       <GameErrorBoundary>
-        <TrulyMinimalScene />
+        <RealComponentTest />
       </GameErrorBoundary>
     </div>
   );
