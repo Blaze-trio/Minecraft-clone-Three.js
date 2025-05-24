@@ -103,22 +103,38 @@ export const FinalVerificationTest: React.FC = () => {
   const [testDirectBlocks, setTestDirectBlocks] = useState(false);
   const [testChunkBlocks, setTestChunkBlocks] = useState(false);
   
-  // Set baseline after 2 seconds
+  // Track test baselines for each individual test - use useRef for immediate access
+  const testBaselines = useRef<{[key: string]: number}>({});
+  
+  // Use useRef to store current stats for access in setTimeout callbacks
+  const currentStats = useRef(stats);
+  
+  // Update the ref whenever stats change
+  useEffect(() => {
+    currentStats.current = stats;
+  }, [stats]);
+  
+  // Set baseline after 2 seconds, only if no tests are running
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (baseline === null) {
+      if (baseline === null && !testDirectBlocks && !testChunkBlocks) {
         setBaseline(stats.geometries);
         console.log(`🎯 BASELINE ESTABLISHED: ${stats.geometries} geometries`);
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [stats.geometries, baseline]);
+  }, [stats.geometries, baseline, testDirectBlocks, testChunkBlocks]);
   
-  const getCurrentDelta = () => baseline !== null ? stats.geometries - baseline : 0;
-  
-  // Record test results
+  const getCurrentDelta = () => baseline !== null ? stats.geometries - baseline : 0;  // Record test results with individual test baseline
   const recordTest = (name: string, expected: number) => {
-    const actual = getCurrentDelta();
+    const testBaseline = testBaselines.current[name];
+    if (testBaseline === undefined) {
+      console.log(`❌ No baseline recorded for test: ${name}`);
+      return;
+    }
+    
+    const latestStats = currentStats.current;
+    const actual = latestStats.geometries - testBaseline;
     const pass = actual === expected;
     const result = {name, geometries: actual, expected, pass};
     
@@ -128,6 +144,24 @@ export const FinalVerificationTest: React.FC = () => {
     });
     
     console.log(`📋 TEST RESULT: ${name} - Expected: ${expected}, Actual: ${actual} ${pass ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`📊 Geometry details: Started at ${testBaseline}, ended at ${latestStats.geometries}`);
+  };
+  // Start a test and record its baseline
+  const startTest = (testName: string, setter: (value: boolean) => void, currentValue: boolean) => {
+    const newState = !currentValue;
+    setter(newState);
+    
+    if (newState) {
+      // Record baseline immediately when test starts - use useRef for immediate access
+      const currentBaseline = stats.geometries;
+      testBaselines.current[testName] = currentBaseline;
+      console.log(`🎯 Test "${testName}" baseline: ${currentBaseline} geometries`);
+        // Record results after components have had time to render
+      setTimeout(() => recordTest(testName, testName === 'ChunkComponent 8 Blocks' ? 1 : 8), 1500);
+    } else {
+      // Clear baseline when test is disabled
+      delete testBaselines.current[testName];
+    }
   };
   
   return (
@@ -171,16 +205,9 @@ export const FinalVerificationTest: React.FC = () => {
           <div style={{ color: '#FFA500', fontWeight: 'bold', marginBottom: '12px' }}>
             🧪 Run Tests:
           </div>
-          
-          <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px' }}>
             <button 
-              onClick={() => {
-                const newState = !testDirectBlocks;
-                setTestDirectBlocks(newState);
-                if (newState) {
-                  setTimeout(() => recordTest('8 Direct Blocks', 8), 1000);
-                }
-              }}
+              onClick={() => startTest('8 Direct Blocks', setTestDirectBlocks, testDirectBlocks)}
               style={{ 
                 background: testDirectBlocks ? '#4CAF50' : '#333',
                 color: 'white',
@@ -198,13 +225,7 @@ export const FinalVerificationTest: React.FC = () => {
           
           <div style={{ marginBottom: '12px' }}>
             <button 
-              onClick={() => {
-                const newState = !testChunkBlocks;
-                setTestChunkBlocks(newState);
-                if (newState) {
-                  setTimeout(() => recordTest('ChunkComponent 8 Blocks', 8), 1000);
-                }
-              }}
+              onClick={() => startTest('ChunkComponent 8 Blocks', setTestChunkBlocks, testChunkBlocks)}
               style={{ 
                 background: testChunkBlocks ? '#4CAF50' : '#333',
                 color: 'white',
@@ -213,11 +234,10 @@ export const FinalVerificationTest: React.FC = () => {
                 borderRadius: '4px',
                 cursor: 'pointer',
                 marginRight: '10px'
-              }}
-            >
+              }}            >
               {testChunkBlocks ? '✅' : '⭕'} ChunkComponent
             </button>
-            <span style={{color: '#ccc', fontSize: '12px'}}>Expected: +8 geometries</span>
+            <span style={{color: '#ccc', fontSize: '12px'}}>Expected: +1 geometry (instanced)</span>
           </div>
         </div>
         

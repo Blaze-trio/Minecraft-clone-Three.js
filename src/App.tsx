@@ -3,14 +3,6 @@ import { GameErrorBoundary } from './components/GameHelpers';
 import SimpleMinecraftGame from './components/SimpleMinecraftGame';
 import { HighPerformanceWorld } from './components/HighPerformanceWorld';
 import { setupEmergencyMemoryHandlers } from './utils/webglUtils';
-import { TestGeneratorComponent } from './components/TestGeneratorComponent';
-import { CleanGeneratorTest } from './components/CleanGeneratorTest';
-import { TrulyMinimalScene } from './components/TrulyMinimalScene';
-import { AbsoluteMinimalScene } from './components/AbsoluteMinimalScene';
-import { ControlledGeometryTest } from './components/ControlledGeometryTest';
-import { RealComponentTest } from './components/RealComponentTest';
-import { IsolatedGeometryTest } from './components/IsolatedGeometryTest';
-import { FinalVerificationTest } from './components/FinalVerificationTest';
 import './App.css';
 
 // Added debug logging
@@ -298,22 +290,9 @@ function App() {
   // Try to load high-performance 3D version
   console.log('Attempting to render high-performance 3D mode');
   return (
-    <div style={{ 
-      width: '100vw', 
-      height: '100vh', 
-      margin: 0, 
-      padding: 0, 
-      overflow: 'hidden',
-      background: '#87CEEB'
-    }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 1000, width: '300px' }}>
-        <TestGeneratorComponent />
-        <CleanGeneratorTest />
-      </div>
-      <GameErrorBoundary>
-        <FinalVerificationTest />
-      </GameErrorBoundary>
-    </div>
+    <GameErrorBoundary>
+      <HighPerformanceWorld />
+    </GameErrorBoundary>
   );
 }
 
