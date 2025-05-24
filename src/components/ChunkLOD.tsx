@@ -6,12 +6,21 @@ import { TextureLoader, NearestFilter, RepeatWrapping } from 'three';
 import type { Block, Chunk } from '../types/game';
 import { BLOCK_TYPES, CHUNK_SIZE } from '../types/game';
 
-// LOD (Level of Detail) settings
-const LOD_LEVELS = 3;          // Number of detail levels
-const LOD_DISTANCES = [        // Distances for each LOD level
-  30,                          // Level 0 (highest detail) up to 30 units away
-  60,                          // Level 1 (medium detail) up to 60 units away
-  150                          // Level 2 (lowest detail) up to 150 units away
+// LOD (Level of Detail) settings - More aggressive distance thresholds
+const LOD_LEVELS = 4;          // Increased number of detail levels
+const LOD_DISTANCES = [        // More aggressive distances for each LOD level
+  20,                          // Level 0 (highest detail) up to 20 units away (reduced from 30)
+  35,                          // Level 1 (medium detail) up to 35 units away (reduced from 60)
+  70,                          // Level 2 (low detail) up to 70 units away (reduced from 150)
+  120                          // Level 3 (minimum detail) up to 120 units away
+];
+
+// Maximum blocks per LOD level to prevent geometry explosion
+const MAX_BLOCKS_PER_LOD = [
+  1200,  // Level 0: Full detail
+  600,   // Level 1: Half detail
+  300,   // Level 2: Quarter detail
+  150    // Level 3: Minimum detail
 ];
 
 // Texture atlas loader with improved caching
@@ -80,7 +89,7 @@ const calculateVisibleFaces = (
   return faces;
 };
 
-// Create block geometry based on visible faces
+// Create block geometry based on visible faces with aggressive optimization
 const createBlockGeometry = (
   blocks: Block[],
   lodLevel: number
@@ -100,29 +109,50 @@ const createBlockGeometry = (
   
   let vertexCount = 0;
   
-  // Process blocks based on LOD level
+  // Limit the number of blocks processed based on LOD level
+  const maxBlocks = MAX_BLOCKS_PER_LOD[lodLevel] || 150;
+  let processedBlocks = 0;
+
+  // Process blocks based on LOD level with more aggressive culling
   const skipRate = Math.pow(2, lodLevel); // Skip blocks for lower detail
+  const heightCulling = lodLevel > 1; // Enable height-based culling for distant chunks
   
-  blocks.forEach((block, index) => {
-    // Skip blocks based on LOD level
-    if (lodLevel > 0 && (
-      block.x % skipRate !== 0 || 
-      block.z % skipRate !== 0 ||
-      block.y % skipRate !== 0
-    )) return;
+  blocks.forEach((block) => {
+    // Stop processing if we've hit the limit for this LOD level
+    if (processedBlocks >= maxBlocks) return;
     
+    // Skip blocks based on LOD level with more aggressive patterns
+    if (lodLevel > 0) {
+      if (block.x % skipRate !== 0 || 
+          block.z % skipRate !== 0 ||
+          (lodLevel > 1 && block.y % skipRate !== 0)) return;
+    }
+    
+    // For distant chunks, only show surface and important blocks
+    if (heightCulling && lodLevel > 2) {
+      // Only show blocks at surface level or high/low extremes
+      const isSurface = blocks.some(other => 
+        other.x === block.x && other.z === block.z && 
+        other.y === block.y + 1 && other.type === 0
+      );
+      const isExtreme = block.y < 10 || block.y > 50;
+      if (!isSurface && !isExtreme) return;
+    }
+
     if (block.type === 0) return; // Skip air blocks
-    
+
     // Get visible faces
     const visibleFaces = calculateVisibleFaces(blockMap, block.x, block.y, block.z);
     
     // Skip if no visible faces
     if (!visibleFaces.some(face => face)) return;
-    
+
     // Scale factor for lower LOD levels
     const scale = Math.pow(2, lodLevel);
     
-    // Add vertices for each visible face
+    processedBlocks++;
+
+    // Add vertices for each visible face (same as before)
     if (visibleFaces[0]) { // Right face (+X)
       blockTypes.push(block.type);
       addFaceVertices(positions, indices, uvs, block, 0, scale, vertexCount);
@@ -159,7 +189,7 @@ const createBlockGeometry = (
       vertexCount += 4;
     }
   });
-  
+
   return { positions, indices, uvs, blockTypes };
 };
 

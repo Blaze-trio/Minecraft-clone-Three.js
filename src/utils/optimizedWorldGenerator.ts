@@ -7,7 +7,11 @@ export class OptimizedWorldGenerator {
   private caveNoise = createNoise2D();
   private treeNoise = createNoise2D();
   private chunkCache = new Map<string, Chunk>();
-
+  
+  // More aggressive geometry limits
+  private readonly MAX_BLOCKS_PER_CHUNK = 800; // Reduced from default
+  private readonly CAVE_THRESHOLD = 0.5; // Increased to create fewer caves
+  private readonly TREE_THRESHOLD = 0.8; // Increased to create fewer trees
   generateChunk(chunkX: number, chunkZ: number): Chunk {
     const cacheKey = this.getChunkKey(chunkX, chunkZ);
     
@@ -16,7 +20,8 @@ export class OptimizedWorldGenerator {
       return this.chunkCache.get(cacheKey)!;
     }
 
-    const blockMap = new Map<string, Block>(); // Use Map to ensure unique positions
+    const blockMap = new Map<string, Block>();
+    let blockCount = 0; // Track block count for budget management
 
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
@@ -27,20 +32,25 @@ export class OptimizedWorldGenerator {
         const heightValue = this.heightNoise(worldX * 0.01, worldZ * 0.01);
         const height = Math.floor((heightValue + 1) * 16) + 32; // Height between 32-64
 
-        // Generate terrain layers
+        // Generate terrain layers with more aggressive optimization
         for (let y = 0; y < Math.min(height + 1, WORLD_HEIGHT); y++) {
+          // Stop generating if we've hit our block limit
+          if (blockCount >= this.MAX_BLOCKS_PER_CHUNK) {
+            console.warn(`Chunk ${chunkX},${chunkZ} hit block limit of ${this.MAX_BLOCKS_PER_CHUNK}`);
+            break;
+          }
+
           let blockType = 0; // Air
           
-          // Cave generation (optimized)
-          // Only calculate cave values where they're needed (not at surface)
+          // Cave generation (more optimized and less frequent)
           let isCave = false;
           if (y < height - 2 && y > 5) {
-            // Use lower resolution for caves
+            // Use lower resolution for caves and higher threshold
             const caveValue = this.caveNoise(
               worldX * 0.04 + Math.floor(y * 0.1) * 0.1,
               worldZ * 0.04 + Math.floor(y * 0.1) * 0.1
             );
-            isCave = caveValue > 0.4;
+            isCave = caveValue > this.CAVE_THRESHOLD; // More restrictive
           }
 
           if (!isCave && y <= height) {
@@ -61,21 +71,36 @@ export class OptimizedWorldGenerator {
               y,
               z,
             });
+            blockCount++;
           }
         }
 
-        // Generate trees occasionally
-        if (height > 40) {
+        // Generate trees occasionally with much higher threshold
+        if (height > 40 && blockCount < this.MAX_BLOCKS_PER_CHUNK - 50) { // Leave room for trees
           const treeValue = this.treeNoise(worldX * 0.1, worldZ * 0.1);
-          if (treeValue > 0.7) { // Reduced tree density
+          if (treeValue > this.TREE_THRESHOLD) { // Much more restrictive
+            const treeSizeBefore = blockMap.size;
             this.generateTree(blockMap, x, height + 1, z);
+            blockCount += (blockMap.size - treeSizeBefore); // Add tree blocks to count
           }
         }
+        
+        // Early exit if we're approaching the limit
+        if (blockCount >= this.MAX_BLOCKS_PER_CHUNK) {
+          break;
+        }
+      }
+      
+      // Break outer loop too if limit reached
+      if (blockCount >= this.MAX_BLOCKS_PER_CHUNK) {
+        break;
       }
     }
 
     // Convert to array for easier access
     const blocks = Array.from(blockMap.values());
+    
+    console.log(`Generated chunk ${chunkX},${chunkZ} with ${blocks.length} blocks (limit: ${this.MAX_BLOCKS_PER_CHUNK})`);
     
     // Store chunk in cache
     const chunk: Chunk = {
@@ -89,9 +114,8 @@ export class OptimizedWorldGenerator {
     
     return chunk;
   }
-
   private generateTree(blockMap: Map<string, Block>, x: number, y: number, z: number): void {
-    const treeHeight = 4 + Math.floor(Math.random() * 2); // Slightly shorter trees
+    const treeHeight = 3 + Math.floor(Math.random() * 2); // Shorter trees (3-4 blocks)
 
     // Tree trunk
     for (let i = 0; i < treeHeight; i++) {
@@ -104,18 +128,18 @@ export class OptimizedWorldGenerator {
       });
     }
 
-    // Tree leaves (with optimization)
+    // Tree leaves (much smaller and more optimized)
     const leavesY = y + treeHeight;
-    const leafRadius = 2;
+    const leafRadius = 1; // Reduced from 2 to 1
     
     for (let dx = -leafRadius; dx <= leafRadius; dx++) {
       for (let dz = -leafRadius; dz <= leafRadius; dz++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          if (dx === 0 && dz === 0 && dy <= 0) continue; // Don't place leaves where trunk is
+        for (let dy = 0; dy <= 1; dy++) { // Only above trunk, not below
+          if (dx === 0 && dz === 0 && dy === 0) continue; // Don't place leaves where trunk is
           
+          // Much more restrictive leaf placement
           const distance = Math.abs(dx) + Math.abs(dz) + Math.abs(dy);
-          // Reduce random leaves generation to improve performance
-          if (distance <= 3 && Math.random() > 0.2) {
+          if (distance <= 2 && Math.random() > 0.4) { // Fewer leaves
             const leafX = x + dx;
             const leafY = leavesY + dy;
             const leafZ = z + dz;

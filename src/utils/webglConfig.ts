@@ -22,40 +22,39 @@ export const WEBGL_RENDERER_CONFIG = {
 
 // Memory usage limits for voxel-based games
 export const VOXEL_MEMORY_CONFIG = {
-  // Maximum resource counts before action is needed
-  MAX_GEOMETRY_COUNT: 30000,  // Much more aggressive limit (was 50000)
-  MAX_TEXTURE_COUNT: 1000,
-  MAX_RENDER_CALLS: 5000,     // Keep draw calls reasonable
-  DANGER_GEOMETRY_COUNT: 25000, // Lower threshold for entering danger zone (was 40000)
-  WARNING_GEOMETRY_COUNT: 20000, // New warning threshold
-  
+  // Maximum resource counts before action is needed - AGGRESSIVE THRESHOLDS
+  MAX_GEOMETRY_COUNT: 15000,  // Extremely aggressive limit to prevent 20k+ issue
+  MAX_TEXTURE_COUNT: 800,     // Reduced texture limit
+  MAX_RENDER_CALLS: 3000,     // More restrictive draw call limit
+  DANGER_GEOMETRY_COUNT: 12000, // Danger zone at 12k geometries
+  WARNING_GEOMETRY_COUNT: 10000, // Warning at 10k geometries
+  CRITICAL_GEOMETRY_COUNT: 8000, // Critical threshold for emergency actions  
   // Memory spike detection thresholds (percentage increase)
-  MEMORY_SPIKE_THRESHOLD: 20, // More sensitive spike detection (was 30%)
+  MEMORY_SPIKE_THRESHOLD: 15, // Very sensitive spike detection for early warning
   
-  // Chunk management to prevent excessive geometry
-  MAX_CHUNKS_LOW_END: 9,      // For low-end devices
-  MAX_CHUNKS_MID_RANGE: 16,   // For mid-range devices
-  MAX_CHUNKS_HIGH_END: 25,    // Reduced from 36 to 25 for high-end devices
+  // Chunk management to prevent excessive geometry - REDUCED LIMITS
+  MAX_CHUNKS_LOW_END: 6,      // Reduced for low-end devices
+  MAX_CHUNKS_MID_RANGE: 12,   // Reduced for mid-range devices  
+  MAX_CHUNKS_HIGH_END: 20,    // Reduced from 25 to 20 for high-end devices
   
-  // Dynamic LOD settings to reduce geometry count
+  // Dynamic LOD settings to reduce geometry count - MORE AGGRESSIVE
   ENABLE_LOD: true,
-  LOD_DISTANCE_NEAR: 24,      // Reduced full detail distance (was 32)
-  LOD_DISTANCE_MID: 48,       // Reduced medium detail distance (was 64) 
-  LOD_DISTANCE_FAR: 96,       // Reduced low detail distance (was 128)
+  LOD_DISTANCE_NEAR: 18,      // Reduced full detail distance (was 24)
+  LOD_DISTANCE_MID: 35,       // Reduced medium detail distance (was 48) 
+  LOD_DISTANCE_FAR: 70,       // Reduced low detail distance (was 96)
   
-  // Maximum geometry per chunk to prevent excessive detail
-  MAX_GEOMETRY_PER_CHUNK: 1200, // Limit blocks per chunk
-  SIMPLIFY_THRESHOLD: 900,     // Threshold to trigger block merging
+  // Maximum geometry per chunk to prevent excessive detail - STRICTER LIMITS
+  MAX_GEOMETRY_PER_CHUNK: 800, // Reduced from 1200 to 800
+  SIMPLIFY_THRESHOLD: 600,     // Reduced threshold to trigger block merging earlier
+    // Memory cleanup intervals (milliseconds) - FASTER RESPONSE
+  CLEANUP_INTERVAL_NORMAL: 15000,    // 15 seconds in normal operation (was 30)
+  CLEANUP_INTERVAL_WARNING: 5000,   // 5 seconds when memory pressure detected (was 10)
+  CLEANUP_INTERVAL_CRITICAL: 2000,   // 2 seconds in critical situations (was 5)
   
-  // Memory cleanup intervals (milliseconds)
-  CLEANUP_INTERVAL_NORMAL: 30000,    // 30 seconds in normal operation
-  CLEANUP_INTERVAL_WARNING: 10000,   // 10 seconds when memory pressure detected
-  CLEANUP_INTERVAL_CRITICAL: 5000,   // 5 seconds in critical situations
-  
-  // Object distance thresholds for cleanup
-  CLEANUP_DISTANCE_NORMAL: 100,      // Normal cleanup distance threshold
-  CLEANUP_DISTANCE_WARNING: 75,      // Warning level distance threshold
-  CLEANUP_DISTANCE_CRITICAL: 40      // Critical level distance threshold
+  // Object distance thresholds for cleanup - MORE AGGRESSIVE
+  CLEANUP_DISTANCE_NORMAL: 80,      // Reduced normal cleanup distance (was 100)
+  CLEANUP_DISTANCE_WARNING: 60,      // Reduced warning level distance (was 75)
+  CLEANUP_DISTANCE_CRITICAL: 30      // Reduced critical level distance (was 40)
 };
 
 // Adapt render settings based on device capabilities
@@ -63,40 +62,37 @@ export function getOptimalSettings() {
   // Check device capabilities
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const isLowEndDevice = navigator.hardwareConcurrency ? navigator.hardwareConcurrency <= 4 : true;
-  
-  // Adjust based on device
+    // Adjust based on device
   if (isMobile || isLowEndDevice) {
     return {
-      renderDistance: 3,    // Short render distance
-      dpr: [0.5, 0.75],      // Low resolution
+      renderDistance: 2,    // Very short render distance (was 3)
+      dpr: [0.5, 0.65],      // Even lower resolution
       shadows: false,        // Disable shadows
-      maxTextureSize: 512,   // Small textures
+      maxTextureSize: 256,   // Very small textures (was 512)
       chunkSize: 16,         // Smaller chunks
       frameLoop: 'demand',   // Render only when needed
       maxChunks: VOXEL_MEMORY_CONFIG.MAX_CHUNKS_LOW_END
     };
   }
-  
-  // For medium devices
+    // For medium devices
   const isHighEndDevice = navigator.hardwareConcurrency ? navigator.hardwareConcurrency >= 8 : false;
   if (!isHighEndDevice) {
     return {
-      renderDistance: 5,     // Medium render distance
-      dpr: [0.75, 1],        // Medium resolution
-      shadows: false,         // Basic shadows
-      maxTextureSize: 1024,  // Medium textures
+      renderDistance: 3,     // Reduced medium render distance (was 5)
+      dpr: [0.65, 0.85],        // Lower medium resolution
+      shadows: false,         // Keep shadows disabled
+      maxTextureSize: 512,  // Reduced medium textures (was 1024)
       chunkSize: 16,          // Standard chunk size
       frameLoop: 'always',   // Always render
       maxChunks: VOXEL_MEMORY_CONFIG.MAX_CHUNKS_MID_RANGE
     };
   }
-  
-  // For high-end devices
+    // For high-end devices - CONSERVATIVE EVEN FOR HIGH-END
   return {
-    renderDistance: 8,       // Long render distance
-    dpr: [1, 1.5],           // High resolution
-    shadows: true,           // Full shadows
-    maxTextureSize: 2048,    // High quality textures
+    renderDistance: 5,       // Reduced long render distance (was 8)
+    dpr: [0.85, 1.2],           // Slightly reduced high resolution
+    shadows: false,           // Keep shadows disabled for performance
+    maxTextureSize: 1024,    // Reduced high quality textures (was 2048)
     chunkSize: 16,            // Standard chunk size
     frameLoop: 'always',     // Always render
     maxChunks: VOXEL_MEMORY_CONFIG.MAX_CHUNKS_HIGH_END
@@ -125,14 +121,15 @@ export function checkWebGLMemoryStatus(gl: any) {
       triangles: render.triangles || 0,
       risk: 'low' as 'low' | 'medium' | 'high' | 'critical' | 'unknown'
     };
-    
-    // Assess risk level
+      // Assess risk level with new aggressive thresholds
     if (stats.geometries > VOXEL_MEMORY_CONFIG.MAX_GEOMETRY_COUNT) {
       stats.risk = 'critical';
     } else if (stats.geometries > VOXEL_MEMORY_CONFIG.DANGER_GEOMETRY_COUNT) {
       stats.risk = 'high';
-    } else if (stats.geometries > VOXEL_MEMORY_CONFIG.DANGER_GEOMETRY_COUNT * 0.7) {
+    } else if (stats.geometries > VOXEL_MEMORY_CONFIG.WARNING_GEOMETRY_COUNT) {
       stats.risk = 'medium';
+    } else if (stats.geometries > VOXEL_MEMORY_CONFIG.CRITICAL_GEOMETRY_COUNT) {
+      stats.risk = 'medium'; // Start warning earlier
     }
     
     return stats;
@@ -256,6 +253,82 @@ export function setupContextRecoveryOptions(gl: any) {
   } catch (e) {
     console.error("Error setting up context recovery:", e);
     return null;
+  }
+}
+
+/**
+ * Emergency memory cleanup when approaching WebGL context loss
+ * @param gl WebGL renderer
+ * @param scene Scene object  
+ * @param chunks Array of chunk objects to potentially remove
+ * @returns Number of objects cleaned up
+ */
+export function emergencyMemoryCleanup(gl: any, scene: any, chunks: any[] = []) {
+  let cleanedCount = 0;
+  
+  try {
+    console.warn('🚨 Emergency memory cleanup initiated!');
+      // 1. Force garbage collection if available
+    if ((window as any).gc) {
+      (window as any).gc();
+    }
+    
+    // 2. Remove distant chunks immediately
+    chunks.forEach((chunk, index) => {
+      if (chunk && chunk.position) {
+        const distance = Math.sqrt(
+          chunk.position.x * chunk.position.x + 
+          chunk.position.z * chunk.position.z
+        );
+        
+        // Remove chunks beyond emergency distance
+        if (distance > VOXEL_MEMORY_CONFIG.CLEANUP_DISTANCE_CRITICAL) {
+          if (chunk.dispose) chunk.dispose();
+          if (scene && scene.remove) scene.remove(chunk);
+          chunks.splice(index, 1);
+          cleanedCount++;
+        }
+      }
+    });
+    
+    // 3. Dispose unused geometries and materials
+    if (scene && scene.traverse) {
+      scene.traverse((object: any) => {
+        if (object.geometry && object.geometry.dispose) {
+          // Check if geometry is shared
+          if (!object.geometry.userData.shared) {
+            object.geometry.dispose();
+            cleanedCount++;
+          }
+        }
+        
+        if (object.material) {
+          const materials = Array.isArray(object.material) 
+            ? object.material 
+            : [object.material];
+            
+          materials.forEach((material: any) => {
+            if (material.dispose && !material.userData.shared) {
+              material.dispose();
+              cleanedCount++;
+            }
+          });
+        }
+      });
+    }
+    
+    // 4. Force WebGL state cleanup
+    if (gl && gl.info) {
+      gl.info.autoReset = true;
+      gl.resetState();
+    }
+    
+    console.log(`🧹 Emergency cleanup removed ${cleanedCount} objects`);
+    return cleanedCount;
+    
+  } catch (e) {
+    console.error("Error during emergency cleanup:", e);
+    return cleanedCount;
   }
 }
 

@@ -21,6 +21,12 @@ export interface HUDData {
   chunksLoaded: number;
   totalChunks: number;
   webglContextStatus: 'stable' | 'warning' | 'lost' | 'restored';
+  webglMemoryStatus?: {
+    geometries: number;
+    textures: number;
+    calls: number;
+    risk: 'low' | 'medium' | 'high' | 'critical' | 'unknown';
+  };
 }
 
 // Shared state for transferring data from Canvas to HUD
@@ -31,7 +37,13 @@ export const useHUDState = () => {
     renderDistance: 0,
     chunksLoaded: 0,
     totalChunks: 0,
-    webglContextStatus: 'stable'
+    webglContextStatus: 'stable',
+    webglMemoryStatus: {
+      geometries: 0,
+      textures: 0,
+      calls: 0,
+      risk: 'low'
+    }
   });
   
   return { hudData, setHUDData };
@@ -157,8 +169,7 @@ export const GameHUD: React.FC<{
   
   // Apply color based on FPS for visual feedback
   const fpsColor = fps > 50 ? 'lime' : fps > 30 ? 'yellow' : 'red';
-  
-  // Status colors for WebGL context
+    // Status colors for WebGL context
   const getStatusInfo = () => {
     switch(webglContextStatus) {
       case 'stable':
@@ -171,6 +182,17 @@ export const GameHUD: React.FC<{
         return { color: 'cyan', text: 'Context Restored' };
       default:
         return { color: 'white', text: 'Unknown' };
+    }
+  };
+  
+  // Memory risk colors
+  const getMemoryRiskColor = (risk: string) => {
+    switch (risk) {
+      case 'low': return 'lime';
+      case 'medium': return 'yellow';
+      case 'high': return 'orange';
+      case 'critical': return 'red';
+      default: return 'white';
     }
   };
   
@@ -201,10 +223,19 @@ export const GameHUD: React.FC<{
       </div>
       <div>
         Chunks: {chunksLoaded} / {totalChunks}
-      </div>
-      <div style={{ color: statusInfo.color, marginTop: '5px', fontWeight: 'bold' }}>
+      </div>      <div style={{ color: statusInfo.color, marginTop: '5px', fontWeight: 'bold' }}>
         WebGL: {statusInfo.text}
       </div>
+      {hudData.webglMemoryStatus && (
+        <div style={{ marginTop: '5px', fontSize: '0.9em' }}>
+          <div style={{ color: getMemoryRiskColor(hudData.webglMemoryStatus.risk), fontWeight: 'bold' }}>
+            Memory: {hudData.webglMemoryStatus.risk.toUpperCase()}
+          </div>
+          <div>Geometries: {hudData.webglMemoryStatus.geometries}</div>
+          <div>Textures: {hudData.webglMemoryStatus.textures}</div>
+          <div>Draw Calls: {hudData.webglMemoryStatus.calls}</div>
+        </div>
+      )}
     </div>
   );
 };

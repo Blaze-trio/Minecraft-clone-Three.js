@@ -6,6 +6,7 @@ import { PlayerController } from './PlayerController';
 import { ChunkLOD } from './ChunkLOD';
 import { HUDUpdater, useHUDState, GameHUD, Crosshair, ControlsHint } from './GameHUD';
 import { WebGLContextManager, MemoryManager } from './WebGLContextHandler';
+import { EnhancedWebGLMonitor } from './EnhancedWebGLMonitor';
 import type { Chunk } from '../types/game';
 import { RENDER_DISTANCE, MAX_RENDER_DISTANCE, CHUNK_SIZE } from '../types/game';
 import * as THREE from 'three';
@@ -174,45 +175,62 @@ const useChunkWorker = () => {
   return { chunks, queueChunk };
 };
 
-// Adaptive performance based on device capabilities
+// Adaptive performance based on device capabilities with more aggressive thresholds
 const useAdaptivePerformance = () => {
-  const [renderDistance, setRenderDistance] = useState(RENDER_DISTANCE);
+  const [renderDistance, setRenderDistance] = useState(Math.min(RENDER_DISTANCE, 4)); // Start with lower render distance
   const frameTimeRef = useRef<number[]>([]);
   const frameCount = useRef(0);
   const performanceLevel = useRef(0);
   const lastAdjustmentTime = useRef(Date.now());
+  const emergencyMode = useRef(false);
   
   // Analyze and adapt based on frame times
   useFrame((_state, delta) => {
     const fps = 1 / delta;
     frameTimeRef.current.push(fps);
     
-    // Keep a rolling window of frame times
-    if (frameTimeRef.current.length > 120) { // 2 seconds at 60fps
+    // Keep a shorter rolling window of frame times for faster response
+    if (frameTimeRef.current.length > 60) { // 1 second at 60fps
       frameTimeRef.current.shift();
     }
     
     frameCount.current++;
     
-    // Adjust every 3 seconds
+    // Emergency mode detection - very low FPS
+    if (fps < 15) {
+      emergencyMode.current = true;
+    } else if (fps > 35) {
+      emergencyMode.current = false;
+    }
+    
+    // More frequent adjustments but with cooldown
     const now = Date.now();
-    if (now - lastAdjustmentTime.current > 3000 && frameTimeRef.current.length > 30) {
+    if (now - lastAdjustmentTime.current > 2000 && frameTimeRef.current.length > 20) { // Reduced from 3000ms to 2000ms
       const avgFps = frameTimeRef.current.reduce((sum, t) => sum + t, 0) / frameTimeRef.current.length;
       
-      // Adjust render distance based on performance
-      if (avgFps > 55 && renderDistance < MAX_RENDER_DISTANCE) {
-        setRenderDistance(prev => Math.min(prev + 1, MAX_RENDER_DISTANCE));
-        performanceLevel.current++;
-      } else if (avgFps < 40 && renderDistance > 2) {
-        setRenderDistance(prev => Math.max(prev - 1, 2));
-        performanceLevel.current--;
+      if (emergencyMode.current && renderDistance > 1) {
+        // Emergency: drastically reduce render distance
+        setRenderDistance(prev => Math.max(prev - 2, 1));
+        performanceLevel.current -= 2;
+        console.warn(`Emergency mode: Reduced render distance to ${renderDistance - 2} due to FPS: ${avgFps.toFixed(1)}`);
+      } else if (!emergencyMode.current) {
+        if (avgFps < 25 && renderDistance > 2) {
+          // Poor performance: reduce render distance more aggressively
+          setRenderDistance(prev => Math.max(prev - 1, 2));
+          performanceLevel.current--;
+          console.warn(`Reduced render distance to ${renderDistance - 1} due to FPS: ${avgFps.toFixed(1)}`);
+        } else if (avgFps > 50 && renderDistance < MAX_RENDER_DISTANCE) {
+          // Good performance: carefully increase render distance
+          setRenderDistance(prev => Math.min(prev + 1, MAX_RENDER_DISTANCE));
+          performanceLevel.current++;
+          console.log(`Increased render distance to ${renderDistance + 1} due to good FPS: ${avgFps.toFixed(1)}`);
+        }
       }
-      
-      lastAdjustmentTime.current = now;
+        lastAdjustmentTime.current = now;
     }
   });
   
-  return { renderDistance, performanceLevel: performanceLevel.current };
+  return { renderDistance, performanceLevel: performanceLevel.current, emergencyMode: emergencyMode.current };
 };
 
 // Raycasting for block selection
@@ -237,7 +255,7 @@ const useBlockSelection = (playerPosition: [number, number, number]) => {
 };
 */
 
-// Chunk visibility and LOD management
+// Enhanced chunk visibility with geometry budget management
 const useChunkVisibility = (
   playerPosition: [number, number, number],
   chunks: Map<string, Chunk>,
@@ -246,8 +264,10 @@ const useChunkVisibility = (
   const { camera } = useThree();
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const projScreenMatrix = useMemo(() => new THREE.Matrix4(), []);
+  const geometryBudget = useRef(0);
+  const maxGeometryBudget = 15000; // Reduced from 30000 to be more aggressive
   
-  // Calculate visible chunks based on frustum culling and distance
+  // Calculate visible chunks based on frustum culling and geometry budget
   const visibleChunks = useMemo(() => {
     // Update frustum from camera
     camera.updateMatrixWorld();
@@ -257,17 +277,46 @@ const useChunkVisibility = (
     // Player chunk coordinates
     const playerChunkX = Math.floor(playerPosition[0] / CHUNK_SIZE);
     const playerChunkZ = Math.floor(playerPosition[2] / CHUNK_SIZE);
-      const visible: Chunk[] = [];
+    const visible: Chunk[] = [];
     
-    // Check each chunk
-    for (const [_id, chunk] of chunks.entries()) {
+    // Sort chunks by distance to prioritize closer chunks
+    const sortedChunks = Array.from(chunks.entries())
+      .map(([id, chunk]) => {
+        const dx = chunk.x - playerChunkX;
+        const dz = chunk.z - playerChunkZ;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        return { id, chunk, distance };
+      })
+      .sort((a, b) => a.distance - b.distance);
+    
+    geometryBudget.current = 0;
+    
+    // Check each chunk in distance order
+    for (const { chunk, distance } of sortedChunks) {
       if (!chunk.isReady) continue;
       
       // Skip chunks outside render distance
-      const dx = chunk.x - playerChunkX;
-      const dz = chunk.z - playerChunkZ;
-      const distSquared = dx * dx + dz * dz;
-      if (distSquared > renderDistance * renderDistance) continue;
+      if (distance > renderDistance) continue;
+      
+      // Estimate geometry count for this chunk based on block count and distance
+      const blockCount = chunk.blocks?.length || 0;
+      let estimatedGeometry;
+      
+      if (distance < 2) {
+        estimatedGeometry = blockCount * 6; // Full detail - all faces
+      } else if (distance < 4) {
+        estimatedGeometry = blockCount * 4; // Medium detail
+      } else if (distance < 8) {
+        estimatedGeometry = blockCount * 2; // Low detail
+      } else {
+        estimatedGeometry = Math.min(blockCount, 100); // Minimum detail
+      }
+      
+      // Check if adding this chunk would exceed our geometry budget
+      if (geometryBudget.current + estimatedGeometry > maxGeometryBudget) {
+        console.warn(`Skipping chunk at ${chunk.x},${chunk.z} - would exceed geometry budget. Current: ${geometryBudget.current}, Adding: ${estimatedGeometry}, Max: ${maxGeometryBudget}`);
+        continue;
+      }
       
       // Calculate chunk center for frustum culling
       const chunkCenter = new THREE.Vector3(
@@ -285,9 +334,11 @@ const useChunkVisibility = (
       // Only include chunks in view frustum
       if (frustum.intersectsSphere(boundingSphere)) {
         visible.push(chunk);
+        geometryBudget.current += estimatedGeometry;
       }
     }
     
+    console.log(`Rendering ${visible.length} chunks with estimated ${geometryBudget.current} geometries (budget: ${maxGeometryBudget})`);
     return visible;
   }, [chunks, camera, playerPosition, renderDistance]);
   
@@ -458,8 +509,7 @@ export const HighPerformanceWorld: React.FC = () => {
   }, []);
     return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>      <Canvas
-        style={{ background: '#87CEEB' }}
-        gl={{
+        style={{ background: '#87CEEB' }}        gl={{
           antialias: false,
           powerPreference: 'high-performance' as const,
           precision: 'mediump' as const, // Better balance between performance and quality
@@ -469,10 +519,6 @@ export const HighPerformanceWorld: React.FC = () => {
           preserveDrawingBuffer: true, 
           failIfMajorPerformanceCaveat: false,
           premultipliedAlpha: true, // Better color stability
-          
-          // Critical setting to prevent context loss
-          // This tells the browser not to release WebGL context when tab is hidden
-          powerPreference: 'high-performance' as const,
         }}
         shadows={false}
         camera={{ 
@@ -535,8 +581,7 @@ export const HighPerformanceWorld: React.FC = () => {
           
           console.log('Canvas created with optimized WebGL settings');
         }}
-      >
-        <Suspense fallback={null}>
+      >        <Suspense fallback={null}>
           <WorldRenderer />
           <HUDUpdater 
             setHUDData={setHUDData}
@@ -551,6 +596,11 @@ export const HighPerformanceWorld: React.FC = () => {
             onContextRestored={() => console.log("Main context restored event handled")}
           />
           <MemoryManager />
+          <EnhancedWebGLMonitor 
+            setHUDData={setHUDData}
+            onEmergencyCleanup={(count) => console.log(`Enhanced monitor cleaned ${count} objects`)}
+            onPerformanceAlert={(level) => console.warn(`Performance alert: ${level}`)}
+          />
           <PointerLockControls />
         </Suspense>
       </Canvas>
