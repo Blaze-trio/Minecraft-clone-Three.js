@@ -40,39 +40,45 @@ class StableSimpleWorldGenerator {
     
     const blocks: Block[] = [];
     const CHUNK_SIZE = 16;
-    
-    for (let x = chunkX * CHUNK_SIZE; x < (chunkX + 1) * CHUNK_SIZE; x++) {
-      for (let z = chunkZ * CHUNK_SIZE; z < (chunkZ + 1) * CHUNK_SIZE; z++) {
+      for (let x = chunkX * CHUNK_SIZE; x < (chunkX + 1) * CHUNK_SIZE; x += 2) { // Skip every other block for performance
+      for (let z = chunkZ * CHUNK_SIZE; z < (chunkZ + 1) * CHUNK_SIZE; z += 2) { // Skip every other block for performance
         // Generate height using simple noise
-        const height = Math.floor(2 + Math.sin(x * 0.1) * Math.cos(z * 0.1) * 3);
+        const height = Math.floor(2 + Math.sin(x * 0.1) * Math.cos(z * 0.1) * 2); // Reduced amplitude
         
-        // Generate terrain layers
-        for (let y = -5; y <= height; y++) {
+        // Generate only essential terrain layers
+        for (let y = Math.max(-2, height - 2); y <= height; y++) { // Reduced depth
           if (y === height) {
             blocks.push({ type: 1, x, y, z }); // Grass top
-          } else if (y >= height - 2) {
-            blocks.push({ type: 2, x, y, z }); // Dirt
+          } else if (y >= height - 1) {
+            blocks.push({ type: 2, x, y, z }); // Dirt (only 1 layer)
           } else {
             blocks.push({ type: 3, x, y, z }); // Stone
           }
         }
-        
-        // Add some random features
-        if (Math.random() < 0.05 && height >= 0) {
-          blocks.push({ type: 4, x, y: height + 1, z }); // Wood
-        }
-        if (Math.random() < 0.03 && height >= 0) {
-          blocks.push({ type: 5, x, y: height + 1, z }); // Leaves
-          if (Math.random() < 0.5) {
-            blocks.push({ type: 5, x, y: height + 2, z }); // More leaves
-          }
+          // Add some random features (prevent overlapping blocks) - reduced frequency
+        const featureRand = Math.random();
+        if (featureRand < 0.01 && height >= 0) { // Much lower chance
+          blocks.push({ type: 4, x, y: height + 1, z }); // Wood (exclusive)
+        } else if (featureRand < 0.015 && height >= 0) { // Much lower chance
+          blocks.push({ type: 5, x, y: height + 1, z }); // Leaves (exclusive)
         }
       }
     }
+      this.generatedChunks.set(key, blocks);
     
-    this.generatedChunks.set(key, blocks);
-    console.log(`🌍 Generated stable chunk (${chunkX}, ${chunkZ}) with ${blocks.length} blocks`);
-    return blocks;
+    // Deduplicate blocks by position (remove duplicates)
+    const blockMap = new Map<string, Block>();
+    blocks.forEach(block => {
+      const blockKey = `${block.x},${block.y},${block.z}`;
+      if (!blockMap.has(blockKey)) {
+        blockMap.set(blockKey, block);
+      }
+    });
+    const deduplicatedBlocks = Array.from(blockMap.values());
+    
+    this.generatedChunks.set(key, deduplicatedBlocks);
+    console.log(`🌍 Generated stable chunk (${chunkX}, ${chunkZ}) with ${deduplicatedBlocks.length} blocks (${blocks.length - deduplicatedBlocks.length} duplicates removed)`);
+    return deduplicatedBlocks;
   }
   
   getBlockAt(x: number, y: number, z: number): number {
@@ -152,8 +158,10 @@ const EnhancedPlayerController: React.FC<EnhancedPlayerControllerProps> = ({
   // Check if a position is solid (has a block)
   const isPositionSolid = useCallback((x: number, y: number, z: number): boolean => {
     return worldGenerator.getBlockAt(Math.floor(x), Math.floor(y), Math.floor(z)) !== 0;
-  }, []);
-  useFrame((_state, delta) => {
+  }, []);  useFrame((_state, delta) => {
+    // Limit delta to prevent large jumps
+    delta = Math.min(delta, 1/30); // Cap at 30 FPS minimum
+    
     const moveSpeed = 6;
     const gravity = -20;
     
@@ -259,7 +267,7 @@ const StableWorldRenderer: React.FC<{ playerPosition: [number, number, number] }
   const [loadedChunks, setLoadedChunks] = useState<Map<string, Block[]>>(new Map());
   const lastPlayerChunk = useRef({ x: 0, z: 0 });
   
-  const RENDER_DISTANCE = 3; // Load 3 chunks around player
+  const RENDER_DISTANCE = 2; // Reduced from 3 for better performance
   
   useEffect(() => {
     const playerChunkX = Math.floor(playerPosition[0] / 16);
@@ -284,19 +292,24 @@ const StableWorldRenderer: React.FC<{ playerPosition: [number, number, number] }
       console.log(`🌍 Loaded ${newChunks.size} chunks around player chunk (${playerChunkX}, ${playerChunkZ})`);
     }
   }, [playerPosition]);
-  
-  // Combine all blocks from loaded chunks
+    // Combine all blocks from loaded chunks with chunk-aware keys
   const allBlocks = useMemo(() => {
-    const blocks: Block[] = [];
-    for (const chunkBlocks of loadedChunks.values()) {
-      blocks.push(...chunkBlocks);
+    const blocks: (Block & { chunkKey: string })[] = [];
+    for (const [chunkKey, chunkBlocks] of loadedChunks.entries()) {
+      chunkBlocks.forEach(block => {
+        blocks.push({ ...block, chunkKey });
+      });
     }
     return blocks;
   }, [loadedChunks]);
-    return (
+    
+  return (
     <group>
       {allBlocks.map((block) => (
-        <SimpleBlock key={`${block.x}-${block.y}-${block.z}`} block={block} />
+        <SimpleBlock 
+          key={`${block.chunkKey}-${block.x}-${block.y}-${block.z}`} 
+          block={block} 
+        />
       ))}
     </group>
   );
@@ -312,14 +325,15 @@ export const SimpleTestWorld: React.FC = () => {
   }, []);
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }}>
-      <Canvas
-        camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 10, 0] }}
+    <div style={{ width: '100vw', height: '100vh' }}>      <Canvas
+        camera={{ fov: 75, near: 0.1, far: 200, position: [0, 10, 0] }} // Reduced far distance
         shadows={false}
         gl={{
           antialias: false,
           powerPreference: 'high-performance',
           precision: 'mediump',
+          alpha: false,
+          stencil: false,
         }}
       >
         <Suspense fallback={null}>
