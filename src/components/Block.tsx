@@ -24,14 +24,13 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
     texture.wrapS = RepeatWrapping;
     texture.wrapT = RepeatWrapping;
   });
-
   const materials = useMemo(() => [
-    <meshLambertMaterial map={textures[1]} />, // Right
-    <meshLambertMaterial map={textures[1]} />, // Left
-    <meshLambertMaterial map={textures[0]} />, // Top
-    <meshLambertMaterial map={textures[2]} />, // Bottom
-    <meshLambertMaterial map={textures[1]} />, // Front
-    <meshLambertMaterial map={textures[1]} />, // Back
+    <meshLambertMaterial key="right" map={textures[1]} />, // Right
+    <meshLambertMaterial key="left" map={textures[1]} />, // Left
+    <meshLambertMaterial key="top" map={textures[0]} />, // Top
+    <meshLambertMaterial key="bottom" map={textures[2]} />, // Bottom
+    <meshLambertMaterial key="front" map={textures[1]} />, // Front
+    <meshLambertMaterial key="back" map={textures[1]} />, // Back
   ], [textures]);
 
   if (block.type === 0) return null; // Don't render air blocks

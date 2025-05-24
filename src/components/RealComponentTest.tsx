@@ -60,7 +60,7 @@ const SingleBlock: React.FC<{ enabled: boolean }> = ({ enabled }) => {
   );
 };
 
-// Small chunk test (2x2x2 = 8 blocks)
+// Small chunk test (2x2x2 = 8 blocks) - NO CULLING VERSION
 const SmallChunk: React.FC<{ enabled: boolean; useOptimized: boolean }> = ({ enabled, useOptimized }) => {
   const [chunk, setChunk] = useState<Chunk | null>(null);
   
@@ -70,25 +70,27 @@ const SmallChunk: React.FC<{ enabled: boolean; useOptimized: boolean }> = ({ ena
       return;
     }
     
-    // Create a minimal 2x2x2 chunk
+    // Create a minimal 2x2x2 chunk with separation (no occlusion culling)
     const blocks = [];
     for (let x = 0; x < 2; x++) {
       for (let y = 0; y < 2; y++) {
         for (let z = 0; z < 2; z++) {
           blocks.push({
-            x: x,
-            y: y,
-            z: z,
+            x: x * 3, // Separate blocks so no culling happens
+            y: y * 3,
+            z: z * 3,
             type: 1 // dirt
           });
         }
       }
     }
     
-    setChunk({
+    console.log(`🔧 SmallChunk created with ${blocks.length} blocks (separated to avoid culling)`);
+      setChunk({
       x: 0,
       z: 0,
-      blocks: blocks
+      blocks: blocks,
+      isReady: true
     });
   }, [enabled]);
   
@@ -97,6 +99,8 @@ const SmallChunk: React.FC<{ enabled: boolean; useOptimized: boolean }> = ({ ena
   if (useOptimized) {
     return <OptimizedChunk chunk={chunk} chunkX={0} chunkZ={0} />;
   } else {
+    // Use ChunkComponent but log what it's doing
+    console.log(`🎯 Rendering ChunkComponent with ${chunk.blocks.length} input blocks`);
     return <ChunkComponent blocks={chunk.blocks} chunkKey="test-chunk" />;
   }
 };
