@@ -101,3 +101,5 @@ export const BLOCK_TYPES: BlockType[] = [
 export const CHUNK_SIZE = 16;
 export const RENDER_DISTANCE = 3;
 export const MAX_RENDER_DISTANCE = 6;
+export const WORLD_SIZE = 1024; // 1024x1024 blocks
+export const WORLD_HEIGHT = 256; // 256 blocks high

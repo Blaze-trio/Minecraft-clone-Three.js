@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Console Check</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #333;
+            color: white;
+            margin: 20px;
+        }
+        .debug-info {
+            background: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        #console-output {
+            background: black;
+            color: lime;
+            padding: 15px;
+            border-radius: 5px;
+            height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-info">
+        <h1>🔍 Console Debug Helper</h1>
+        <p>This page captures console logs and displays them here for debugging</p>
+        <button class="button" onclick="openMainApp()">Open Main App</button>
+        <button class="button" onclick="clearConsole()">Clear Console</button>
+        <button class="button" onclick="checkWebGL()">Check WebGL</button>
+    </div>
+    
+    <div id="console-output">Console output will appear here...\n</div>
+
+    <script>
+        const consoleOutput = document.getElementById('console-output');
+        let logCount = 0;
+
+        // Capture console logs
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToOutput('LOG', args.join(' '));
+        };
+
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToOutput('ERROR', args.join(' '));
+        };
+
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            addToOutput('WARN', args.join(' '));
+        };
+
+        function addToOutput(type, message) {
+            logCount++;
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'ERROR' ? 'red' : type === 'WARN' ? 'yellow' : 'lime';
+            consoleOutput.innerHTML += `<span style="color: ${color}">[${timestamp}] ${type}: ${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            
+            if (logCount > 100) {
+                // Keep only last 100 logs
+                const lines = consoleOutput.innerHTML.split('\n');
+                consoleOutput.innerHTML = lines.slice(-100).join('\n');
+                logCount = 100;
+            }
+        }
+
+        function openMainApp() {
+            window.open('/', '_blank');
+            addToOutput('INFO', 'Opened main app in new tab');
+        }
+
+        function clearConsole() {
+            consoleOutput.innerHTML = 'Console cleared...\n';
+            logCount = 0;
+        }
+
+        function checkWebGL() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const info = gl.getExtension('WEBGL_debug_renderer_info');
+                    addToOutput('INFO', 'WebGL is available');
+                    if (info) {
+                        addToOutput('INFO', `Renderer: ${gl.getParameter(info.UNMASKED_RENDERER_WEBGL)}`);
+                        addToOutput('INFO', `Vendor: ${gl.getParameter(info.UNMASKED_VENDOR_WEBGL)}`);
+                    }
+                } else {
+                    addToOutput('ERROR', 'WebGL is not available');
+                }
+            } catch (e) {
+                addToOutput('ERROR', 'WebGL check failed: ' + e.message);
+            }
+        }
+
+        // Initial message
+        addToOutput('INFO', 'Console debug helper loaded');
+        addToOutput('INFO', 'Open the main app and watch for logs here');
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { GameErrorBoundary } from './components/GameHelpers';
 import SimpleMinecraftGame from './components/SimpleMinecraftGame';
-import { HighPerformanceWorld } from './components/HighPerformanceWorld';
+import GameModeSelector from './components/GameModeSelector';
 import { setupEmergencyMemoryHandlers } from './utils/webglUtils';
 import './App.css';
 
@@ -287,11 +287,11 @@ function App() {
     );
   }
 
-  // Try to load high-performance 3D version
-  console.log('Attempting to render high-performance 3D mode');
+  // Try to load 3D version with mode selection
+  console.log('Attempting to render 3D mode');
   return (
     <GameErrorBoundary>
-      <HighPerformanceWorld />
+      <GameModeSelector />
     </GameErrorBoundary>
   );
 }

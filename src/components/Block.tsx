@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, Suspense } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { TextureLoader, NearestFilter, RepeatWrapping } from 'three';
 import type { Block as BlockType } from '../types/game';
@@ -8,7 +8,32 @@ interface BlockProps {
   block: BlockType;
 }
 
-export const Block: React.FC<BlockProps> = ({ block }) => {
+// Fallback block component without textures
+const FallbackBlock: React.FC<BlockProps> = ({ block }) => {
+  // Define fallback colors for different block types
+  const getBlockColor = (type: number) => {
+    switch (type) {
+      case 1: return '#8B4513'; // Dirt - brown
+      case 2: return '#228B22'; // Grass - green  
+      case 3: return '#808080'; // Stone - gray
+      case 4: return '#654321'; // Wood - brown
+      case 5: return '#32CD32'; // Leaves - light green
+      default: return '#8B4513'; // Default brown
+    }
+  };
+  
+  const color = getBlockColor(block.type);
+  
+  return (
+    <mesh position={[block.x, block.y, block.z]}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshLambertMaterial color={color} />
+    </mesh>
+  );
+};
+
+// Textured block component
+const TexturedBlock: React.FC<BlockProps> = ({ block }) => {
   const blockType = BLOCK_TYPES[block.type];
   
   const textures = useLoader(TextureLoader, [
@@ -18,12 +43,16 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
   ]);
 
   // Configure textures for pixel art look
-  textures.forEach(texture => {
-    texture.magFilter = NearestFilter;
-    texture.minFilter = NearestFilter;
-    texture.wrapS = RepeatWrapping;
-    texture.wrapT = RepeatWrapping;
-  });  const materials = useMemo(() => [
+  useMemo(() => {
+    textures.forEach(texture => {
+      texture.magFilter = NearestFilter;
+      texture.minFilter = NearestFilter;
+      texture.wrapS = RepeatWrapping;
+      texture.wrapT = RepeatWrapping;
+    });
+  }, [textures]);
+
+  const materials = useMemo(() => [
     <meshLambertMaterial key="right" map={textures[1]} />, // Right
     <meshLambertMaterial key="left" map={textures[1]} />, // Left
     <meshLambertMaterial key="top" map={textures[0]} />, // Top
@@ -31,8 +60,6 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
     <meshLambertMaterial key="front" map={textures[1]} />, // Front
     <meshLambertMaterial key="back" map={textures[1]} />, // Back
   ], [textures]);
-
-  if (block.type === 0) return null; // Don't render air blocks
 
   return (
     <mesh position={[block.x, block.y, block.z]}>
@@ -42,9 +69,25 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
   );
 };
 
-interface ChunkProps {
+export const Block: React.FC<BlockProps> = ({ block }) => {
+  if (block.type === 0) {
+    return null; // Don't render air blocks
+  }
+
+  const blockType = BLOCK_TYPES[block.type];
+  if (!blockType) {
+    console.error(`❌ Block component: Unknown block type ${block.type} at (${block.x}, ${block.y}, ${block.z})`);
+    return null;
+  }
+
+  return (
+    <Suspense fallback={<FallbackBlock block={block} />}>
+      <TexturedBlock block={block} />
+    </Suspense>
+  );
+};interface ChunkProps {
   blocks: BlockType[];
-  chunkKey?: string; // Add chunk identification for better keys
+  chunkKey?: string;
 }
 
 export const ChunkComponent: React.FC<ChunkProps> = ({ blocks, chunkKey = '' }) => {
@@ -54,44 +97,11 @@ export const ChunkComponent: React.FC<ChunkProps> = ({ blocks, chunkKey = '' }) 
     blocks.forEach(block => {
       if (block.type === 0) return; // Skip air blocks
       const blockKey = `${block.x}-${block.y}-${block.z}`;
-      // Keep the last block at each position (in case of duplicates)
       blockMap.set(blockKey, block);
     });
     
-    const uniqueBlocks = Array.from(blockMap.values());
-    
-    // Then apply occlusion culling - only render blocks that have at least one exposed face
-    return uniqueBlocks.filter(block => {
-      // Check if any face is exposed (simplified)
-      const hasNeighbor = (dx: number, dy: number, dz: number) => {
-        return uniqueBlocks.some(other => 
-          other.x === block.x + dx && 
-          other.y === block.y + dy && 
-          other.z === block.z + dz && 
-          other.type !== 0
-        );
-      };
-
-      // If any face is not blocked, render the block
-      return !(
-        hasNeighbor(1, 0, 0) &&
-        hasNeighbor(-1, 0, 0) &&
-        hasNeighbor(0, 1, 0) &&
-        hasNeighbor(0, -1, 0) &&
-        hasNeighbor(0, 0, 1) &&
-        hasNeighbor(0, 0, -1)
-      );    });
+    return Array.from(blockMap.values());
   }, [blocks]);
-
-  // Add debugging for chunk rendering
-  useEffect(() => {
-    console.log(`🔍 ChunkComponent: ${blocks.length} input blocks -> ${visibleBlocks.length} visible blocks`);
-    if (blocks.length !== visibleBlocks.length) {
-      console.log('🔍 Culled blocks:', blocks.length - visibleBlocks.length);
-      console.log('🔍 Block positions:', blocks.map(b => `(${b.x},${b.y},${b.z})`));
-      console.log('🔍 Visible positions:', visibleBlocks.map(b => `(${b.x},${b.y},${b.z})`));
-    }
-  }, [blocks.length, visibleBlocks.length, blocks, visibleBlocks]);
 
   return (
     <group>

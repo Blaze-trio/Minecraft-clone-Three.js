@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, Suspense } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { PointerLockControls } from '@react-three/drei';
+// import { PointerLockControls } from '@react-three/drei'; // DISABLED: Might create geometry
 import { ImprovedWorldGenerator } from '../utils/cleanGenerator';
 import { PlayerController } from './PlayerController';
-import { HUDUpdater, useHUDState, GameHUD, Crosshair, ControlsHint } from './GameHUD';
+import { useHUDState, GameHUD, Crosshair, ControlsHint, HUDUpdater } from './GameHUD';
 import { WebGLContextManager, MemoryManager } from './WebGLContextManager';
 import { EnhancedWebGLMonitor } from './EnhancedWebGLMonitor';
-import { ChunkComponent } from './Block';
+import { SimpleChunkComponent } from './SimpleBlock';
+import { MinimalGeometryCleanup, ContextResetUtility } from './GeometryCleanupSystem';
 import type { Chunk } from '../types/game';
-import { RENDER_DISTANCE, MAX_RENDER_DISTANCE, CHUNK_SIZE } from '../types/game';
+import { MAX_RENDER_DISTANCE, CHUNK_SIZE } from '../types/game';
 import * as THREE from 'three';
 
 // Worker for efficient chunk generation
@@ -402,6 +403,102 @@ const useChunkVisibility = (
   return visibleChunks;
 };
 
+// Limited chunk renderer for controlled testing (Step 5)
+const LimitedChunkRenderer: React.FC<{ playerPosition: [number, number, number] }> = ({ playerPosition: _playerPosition }) => {
+  const [testChunk, setTestChunk] = useState<Chunk | null>(null);
+  const [isEnabled, setIsEnabled] = useState(false);
+  const hasInitialized = useRef(false);
+
+  // Initialize after a delay to let the scene stabilize
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    
+    const timer = setTimeout(() => {
+      console.log('🎯 STEP 5: Initializing LIMITED chunk renderer');
+      console.log('⚠️ Will create SINGLE test chunk with ~4-8 blocks');
+      console.log('💡 Expected geometry increase: +4 to +8 geometries');
+        // Create a very simple test chunk with just a few blocks
+      const generator = new ImprovedWorldGenerator();
+      const chunk = generator.generateChunk(0, 0);
+      
+      console.log(`🔧 Generated chunk has ${chunk.blocks.length} total blocks`);
+      console.log(`🔧 First 10 blocks:`, chunk.blocks.slice(0, 10).map(b => `(${b.x},${b.y},${b.z}) type:${b.type}`));
+        // Drastically limit the chunk to just a few blocks for testing
+      // Filter out air blocks first, then take non-air blocks
+      const nonAirBlocks = chunk.blocks.filter(b => b.type !== 0);
+      console.log(`🔧 After filtering air: ${nonAirBlocks.length} non-air blocks`);
+      console.log(`🔧 Block type distribution:`, chunk.blocks.reduce((acc, b) => { acc[b.type] = (acc[b.type] || 0) + 1; return acc; }, {} as Record<number, number>));
+        let limitedBlocks;
+      if (nonAirBlocks.length === 0) {
+        // Force create some test blocks if none exist
+        console.log(`⚠️ No non-air blocks found! Creating manual test blocks`);
+        limitedBlocks = [
+          { x: 0, y: 1, z: 0, type: 1 }, // Grass
+          { x: 1, y: 1, z: 0, type: 2 }, // Dirt  
+          { x: 0, y: 1, z: 1, type: 3 }, // Stone
+          { x: 1, y: 1, z: 1, type: 1 }, // Grass
+        ];
+      } else {
+        // Adjust block positions to be near the player (Y=1-5 instead of Y=40)
+        limitedBlocks = nonAirBlocks.slice(0, 4).map((block, index) => ({
+          ...block,
+          x: index, // Spread them out in X
+          y: 1,     // Put them at ground level near player (Y=5)
+          z: 0      // Put them in front of player
+        }));
+      }
+      
+      console.log(`🔧 Selected for test: ${limitedBlocks.length} blocks:`, limitedBlocks.map(b => `(${b.x},${b.y},${b.z}) type:${b.type}`));
+      
+      const limitedChunk: Chunk = {
+        ...chunk,
+        blocks: limitedBlocks
+      };
+      
+      setTestChunk(limitedChunk);
+      
+      // Enable after another short delay
+      setTimeout(() => {
+        console.log(`🚀 Enabling limited chunk with ${limitedBlocks.length} blocks`);
+        setIsEnabled(true);
+      }, 2000);
+      
+      hasInitialized.current = true;
+    }, 5000); // Wait 5 seconds for scene to stabilize
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!testChunk || !isEnabled) {
+    return null;
+  }  console.log(`🔍 Rendering limited chunk with ${testChunk.blocks.length} blocks`);
+  console.log(`🔍 Block details:`, testChunk.blocks.map(b => `(${b.x},${b.y},${b.z}) type:${b.type}`));
+    // Add a direct mesh test alongside ChunkComponent to isolate the issue
+  return (
+    <group>
+      {/* Direct mesh test - should create geometry immediately */}
+      <mesh position={[10, 10, 10]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshLambertMaterial color="red" />
+      </mesh>
+      
+      {/* Simple chunk test without texture loading */}
+      <SimpleChunkComponent
+        key="simple-test-chunk"
+        blocks={testChunk.blocks}
+        chunkKey="simple-test"
+      />
+      
+      {/* Original ChunkComponent test (with textures) */}
+      {/* <ChunkComponent
+        key="limited-test-chunk"
+        blocks={testChunk.blocks}
+        chunkKey="limited-test"
+      /> */}
+    </group>
+  );
+};
+
 // Optimized version of the world renderer
 const WorldRenderer: React.FC = () => {
   // State for player position and chunks
@@ -460,25 +557,32 @@ const WorldRenderer: React.FC = () => {
   const handlePlayerMove = useCallback((position: [number, number, number]) => {
     setPlayerPosition(position);
   }, []);
-  
   return (
     <>
-      {/* Player Controller */}
+      {/* ULTRA-MINIMAL TEST: Only lights + PlayerController */}
+      
+      {/* PlayerController - should add 0 geometries */}
       <PlayerController
         position={playerPosition}
         onPositionChange={handlePlayerMove}
       />
 
-      {/* RE-ENABLE: Chunk rendering */}
-      {visibleChunks.map((chunk) => (
+      {/* Geometry cleanup system to mitigate R3F leaks */}
+      <MinimalGeometryCleanup />
+      <ContextResetUtility 
+        resetInterval={1800} 
+        onReset={() => console.log('🔄 Context reset to prevent leaks')}
+      />      {/* STEP 5: CONTROLLED CHUNK RENDERING - Single test chunk only */}
+      <LimitedChunkRenderer playerPosition={playerPosition} />
+
+      {/* DISABLED: Full chunk system */}
+      {/* {visibleChunks.map((chunk) => (
         <ChunkComponent
           key={`${chunk.x}-${chunk.z}`}
           blocks={chunk.blocks}
           chunkKey={`${chunk.x}-${chunk.z}`}
         />
-      ))}
-
-      {/* RE-ENABLE: All managers and monitors */}
+      ))} */}{/* STEP 1: Re-enable HUDUpdater (should add 0 geometries) */}
       <HUDUpdater 
         setHUDData={setHUDData}
         playerPosition={playerPosition} 
@@ -487,21 +591,22 @@ const WorldRenderer: React.FC = () => {
         totalChunks={chunks.size}          
       />
 
+      {/* STEP 2: Re-enable WebGLContextManager (should add 0 geometries) */}
       <WebGLContextManager 
         setHUDData={setHUDData}
         onContextLost={() => console.log("Main context lost event handled")}
         onContextRestored={() => console.log("Main context restored event handled")}
-      />
-
+      />      {/* STEP 3: Re-enable MemoryManager (should add 0 geometries) */}
       <MemoryManager />
 
+      {/* STEP 4: Re-enable EnhancedWebGLMonitor (should add 0 geometries) */}
       <EnhancedWebGLMonitor 
         setHUDData={setHUDData}
         onEmergencyCleanup={(count) => console.log(`Enhanced monitor cleaned ${count} objects`)}
         onPerformanceAlert={(level) => console.warn(`Performance alert: ${level}`)}
       />
 
-      {/* Basic lighting */}
+      {/* Basic lighting - should add 0 geometries */}
       <ambientLight intensity={0.5} />
       <directionalLight 
         position={[100, 100, 100]} 
@@ -721,8 +826,7 @@ const LoadingOverlay: React.FC = () => {
 };
 
 // Main game world component with error handling
-export const HighPerformanceWorld: React.FC = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
+export const HighPerformanceWorld: React.FC = () => {  const [isLoaded, setIsLoaded] = useState(false);
   const { hudData, setHUDData } = useHUDState();
   
   // Mark as loaded after delay
@@ -806,16 +910,15 @@ export const HighPerformanceWorld: React.FC = () => {
         }}
       >        <Suspense fallback={null}>
           <WorldRenderer />
-          <PointerLockControls />
+          {/* DISABLED: PointerLockControls might create geometry */}
+          {/* <PointerLockControls /> */}
         </Suspense>
       </Canvas>
 
       {/* HUD elements outside canvas */}
       <GameHUD hudData={hudData} />
       <Crosshair />
-      <ControlsHint />
-
-      {/* Updated instruction overlay */}
+      <ControlsHint />      {/* Updated instruction overlay */}
       <div style={{
         position: 'absolute',
         top: '20px',
@@ -827,17 +930,19 @@ export const HighPerformanceWorld: React.FC = () => {
         fontFamily: 'monospace',
         fontSize: '14px',
         zIndex: 1000
-      }}>
-        <div style={{color: '#4CAF50', fontWeight: 'bold', marginBottom: '10px'}}>🎮 CHUNK RENDERING ENABLED</div>
-        <div>📋 Controls:</div>
-        <div>• Click canvas to enable mouse look</div>
-        <div>• WASD to move</div>
-        <div>• ESC to release mouse</div>
-        <div style={{marginTop: '10px', color: '#4CAF50'}}>✅ Components:</div>
-        <div style={{color: '#81C784'}}>• Chunks: ✅ RENDERING</div>
-        <div style={{color: '#81C784'}}>• HUD: ✅ ACTIVE</div>
-        <div style={{color: '#81C784'}}>• Managers: ✅ ACTIVE</div>
-        <div style={{marginTop: '10px', color: '#FFA500'}}>🔬 Testing world generation...</div>
+      }}>        <div style={{color: '#FF5722', fontWeight: 'bold', marginBottom: '10px'}}>🔬 STEP 5: CONTROLLED CHUNK TEST</div>
+        <div>📋 Active Components (Steps 1-5):</div>
+        <div style={{color: '#4CAF50'}}>• PlayerController (no geometry)</div>
+        <div style={{color: '#4CAF50'}}>• All monitoring systems (Steps 1-4 ✅)</div>
+        <div style={{color: '#4CAF50'}}>• Geometry Cleanup System (Active)</div>
+        <div style={{color: '#FFA500'}}>• Limited Chunk Renderer (Step 5 ⏳)</div>
+        <div style={{marginTop: '8px', color: '#FFA500'}}>⏳ Waiting 5s for stabilization...</div>
+        <div style={{color: '#FFA500'}}>Then: +4 blocks = +4 geometries</div>
+        <div style={{marginTop: '10px', color: '#f44336'}}>❌ Still Disabled:</div>
+        <div style={{color: '#ffcdd2'}}>• Full chunk system</div>
+        <div style={{color: '#ffcdd2'}}>• World generation</div>
+        <div style={{marginTop: '10px', color: '#FFA500'}}>🎯 Expected: Base + 4 geometries max</div>
+        <div style={{color: '#FFA500'}}>If 100+: Fundamental R3F issue</div>
       </div>
       
       {/* Loading overlay */}
