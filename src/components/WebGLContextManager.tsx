@@ -101,8 +101,7 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
       }));
       
       // Reset recovery flag
-      isRecovering.current = false;
-        // Notify parent that context was restored
+      isRecovering.current = false;      // Notify parent that context was restored
       if (onContextRestored) {
         onContextRestored();
       }
@@ -113,16 +112,10 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
         gl.setPixelRatio(Math.min(window.devicePixelRatio, 1));
         gl.shadowMap.enabled = false;
         gl.shadowMap.autoUpdate = false;
-        
-        // Force a clear to ensure proper state
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+          // Force a clear to ensure proper state
+        gl.clear();
       } catch (err) {
         console.warn('Error reinitializing renderer after context restore:', err);
-      }
-      
-      // Notify parent component if callback provided
-      if (onContextRestored) {
-        onContextRestored();
       }
       
       // After a delay, update status to stable
@@ -136,12 +129,14 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
     
     // Add event listeners
     canvas.addEventListener('webglcontextlost', handleContextLost);
-    canvas.addEventListener('webglcontextrestored', handleContextRestored);
-    
-    // Apply optimization settings
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);    // Apply optimization settings
     gl.setClearColor(new THREE.Color('#87CEEB'));
     
-    console.log("WebGL context manager initialized");
+    // Only log initialization once per session using a global flag
+    if (!(window as any).__webglManagerInitialized) {
+      console.log("WebGL context manager initialized");
+      (window as any).__webglManagerInitialized = true;
+    }
     
     return () => {
       // Remove event listeners on cleanup

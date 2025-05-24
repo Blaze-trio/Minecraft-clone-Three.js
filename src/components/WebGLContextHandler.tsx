@@ -215,11 +215,14 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
     // Add event listeners
     canvas.addEventListener('webglcontextlost', handleContextLost);
     canvas.addEventListener('webglcontextrestored', handleContextRestored);
-    
-    // Apply optimization settings
+      // Apply optimization settings
     gl.setClearColor(new THREE.Color('#87CEEB'));
     
-    console.log("WebGL context manager initialized");    return () => {
+    // Only log initialization once per session using a global flag
+    if (!(window as any).__webglHandlerInitialized) {
+      console.log("WebGL context handler initialized");
+      (window as any).__webglHandlerInitialized = true;
+    }return () => {
       // Remove event listeners on cleanup
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);

@@ -264,10 +264,10 @@ const useChunkVisibility = (
 ) => {
   const { camera } = useThree();
   const frustum = useMemo(() => new THREE.Frustum(), []);
-  const projScreenMatrix = useMemo(() => new THREE.Matrix4(), []);
-  const geometryBudget = useRef(0);
+  const projScreenMatrix = useMemo(() => new THREE.Matrix4(), []);  const geometryBudget = useRef(0);
   const maxGeometryBudget = 3000; // Extreme reduction from 15000
   const emergencyMode = useRef(false);
+  const lastEmergencyLog = useRef(0);
   
   // Get current geometry count from THREE.js
   const getCurrentGeometryCount = () => {
@@ -382,14 +382,20 @@ const useChunkVisibility = (
         chunkCenter,
         CHUNK_SIZE * Math.sqrt(3)
       );
-      
-      // Only include chunks in view frustum
+        // Only include chunks in view frustum
       if (frustum.intersectsSphere(boundingSphere)) {
         visible.push(chunk);
         geometryBudget.current += estimatedGeometry;
       }
     }
+    
+    // Only log emergency mode occasionally to prevent spam
+    const now = Date.now();
+    if (!lastEmergencyLog.current || now - lastEmergencyLog.current > 2000) {
       console.log(`🚨 EMERGENCY MODE: Rendering only ${visible.length} chunks (max: ${MAX_CHUNKS}) with estimated ${geometryBudget.current} geometries (budget: ${maxGeometryBudget})`);
+      lastEmergencyLog.current = now;
+    }
+    
     return visible;
   }, [chunks, camera, playerPosition, renderDistance]);
   
@@ -511,10 +517,11 @@ const WorldRenderer: React.FC = () => {
 
 // Debug logger component to track geometry count in minimal scene
 const DebugLogger: React.FC = () => {
-  const { gl } = useThree();
-  const frameCount = useRef(0);
+  const { gl } = useThree();  const frameCount = useRef(0);
   const hasLogged = useRef(false);
-  const geometryHistory = useRef<number[]>([]);  // Log immediately on mount
+  const geometryHistory = useRef<number[]>([]);
+  const lastGeometryError = useRef(0);
+  const alertShown = useRef(false);// Log immediately on mount
   useEffect(() => {
     console.log('🔍 ABSOLUTE MINIMAL SCENE TEST - Everything disabled except lights');
     console.log('📊 Expected: ONLY lighting (ambient + directional) = 0 geometries');
@@ -593,25 +600,34 @@ const DebugLogger: React.FC = () => {
             <div style="color:orange;">Only Lights + PlayerController</div>
           </div>
       `;
-    }    // Emergency detection: if geometries explode in ULTRA-minimal scene
-    if (geometries > 100) {
-      console.error(`🚨🚨🚨 CRITICAL: ${geometries} geometries in ULTRA-MINIMAL scene!`);
-      console.error('🔍 DISABLED COMPONENTS:');
-      console.error('   ❌ Sky component');
-      console.error('   ❌ Chunk rendering'); 
-      console.error('   ❌ WebGL monitoring systems');
-      console.error('   ❌ Memory managers');
-      console.error('   ❌ HUD updater');
-      console.error('🎯 ONLY ACTIVE COMPONENTS:');
-      console.error('   ✅ PlayerController (no geometry)');
-      console.error('   ✅ 2 basic planes + 1 cube = 3 geometries');
-      console.error('   ✅ Basic lighting (no geometry)');
-      console.error('💡 This suggests React Three Fiber or Three.js is leaking objects!');
-      
-      // Show alert to make it visible
-      setTimeout(() => {
-        alert(`GEOMETRY EXPLOSION: ${geometries} geometries in ultra-minimal scene! This is a React Three Fiber issue.`);
-      }, 100);    } else if (geometries <= 10 && frameCount.current > 300) {
+    }      // Emergency detection: if geometries explode in ULTRA-minimal scene
+      const now = Date.now();
+      if (geometries > 100) {
+        // Only log once per 5 seconds to prevent spam
+        if (!lastGeometryError.current || now - lastGeometryError.current > 5000) {
+          console.error(`🚨🚨🚨 CRITICAL: ${geometries} geometries in ULTRA-MINIMAL scene!`);
+          console.error('🔍 DISABLED COMPONENTS:');
+          console.error('   ❌ Sky component');
+          console.error('   ❌ Chunk rendering'); 
+          console.error('   ❌ WebGL monitoring systems');
+          console.error('   ❌ Memory managers');
+          console.error('   ❌ HUD updater');
+          console.error('🎯 ONLY ACTIVE COMPONENTS:');
+          console.error('   ✅ PlayerController (no geometry)');
+          console.error('   ✅ 2 basic planes + 1 cube = 3 geometries');
+          console.error('   ✅ Basic lighting (no geometry)');
+          console.error('💡 This suggests React Three Fiber or Three.js is leaking objects!');
+          lastGeometryError.current = now;
+          
+          // Show alert only once
+          if (!alertShown.current) {
+            setTimeout(() => {
+              alert(`GEOMETRY EXPLOSION: ${geometries} geometries in ultra-minimal scene! This is a React Three Fiber issue.`);
+            }, 100);
+            alertShown.current = true;
+          }
+        }
+      } else if (geometries <= 10 && frameCount.current > 300) {
       console.log(`✅ SUCCESS: Ultra-minimal scene is stable! Geometries: ${geometries}`);
       console.log('🎯 We can now systematically re-enable components one by one');
       console.log('📋 NEXT STEPS:');

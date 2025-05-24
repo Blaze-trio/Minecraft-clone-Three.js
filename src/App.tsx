@@ -5,6 +5,7 @@ import { HighPerformanceWorld } from './components/HighPerformanceWorld';
 import { setupEmergencyMemoryHandlers } from './utils/webglUtils';
 import { TestGeneratorComponent } from './components/TestGeneratorComponent';
 import { CleanGeneratorTest } from './components/CleanGeneratorTest';
+import { TrulyMinimalScene } from './components/TrulyMinimalScene';
 import './App.css';
 
 // Added debug logging
@@ -305,7 +306,7 @@ function App() {
         <CleanGeneratorTest />
       </div>
       <GameErrorBoundary>
-        <HighPerformanceWorld />
+        <TrulyMinimalScene />
       </GameErrorBoundary>
     </div>
   );
