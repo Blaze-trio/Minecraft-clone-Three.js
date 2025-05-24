@@ -1,30 +1,23 @@
-// Stable World Generator with realistic terrain and proper collision
+// Optimized Stable World Generator - Performance focused
 import type { Chunk, Block } from '../types/game';
 
 const CHUNK_SIZE = 16;
-const SEA_LEVEL = 32; // Reduced from 64
-const MOUNTAIN_HEIGHT = 8; // Reduced from 20
-const MIN_HEIGHT = 20; // Minimum terrain height
-const MAX_HEIGHT = 45; // Maximum terrain height
+const SEA_LEVEL = 32; // Reduced height
+const MOUNTAIN_HEIGHT = 6; // Much smaller mountains
+const MIN_HEIGHT = 25; // Minimum terrain height
+const MAX_HEIGHT = 40; // Maximum terrain height - much lower
 
-// Enhanced Simplex Noise for realistic terrain
-class StableNoise {
+// Simple noise generator for performance
+class OptimizedNoise {
   private perm: number[] = [];
-  private gradients: number[][] = [];
   
   constructor(seed = 12345) {
-    // Initialize gradients
-    this.gradients = [
-      [1, 1], [-1, 1], [1, -1], [-1, -1],
-      [1, 0], [-1, 0], [0, 1], [0, -1]
-    ];
-    
     // Initialize permutation array
     for (let i = 0; i < 256; i++) {
       this.perm[i] = i;
     }
     
-    // Shuffle using seed for deterministic results
+    // Simple shuffle using seed
     let rng = seed;
     for (let i = 255; i > 0; i--) {
       rng = (rng * 1664525 + 1013904223) % 4294967296;
@@ -32,7 +25,7 @@ class StableNoise {
       [this.perm[i], this.perm[j]] = [this.perm[j], this.perm[i]];
     }
     
-    // Extend to 512 for wrapping
+    // Extend to 512
     for (let i = 0; i < 256; i++) {
       this.perm[i + 256] = this.perm[i];
     }
@@ -44,11 +37,6 @@ class StableNoise {
   
   private lerp(a: number, b: number, t: number): number {
     return a + t * (b - a);
-  }
-  
-  private grad(hash: number, x: number, y: number): number {
-    const gradient = this.gradients[hash & 7];
-    return gradient[0] * x + gradient[1] * y;
   }
   
   noise(x: number, y: number): number {
@@ -65,49 +53,35 @@ class StableNoise {
     const B = this.perm[X + 1] + Y;
     
     return this.lerp(
-      this.lerp(
-        this.grad(this.perm[A], x, y),
-        this.grad(this.perm[B], x - 1, y),
-        u
-      ),
-      this.lerp(
-        this.grad(this.perm[A + 1], x, y - 1),
-        this.grad(this.perm[B + 1], x - 1, y - 1),
-        u
-      ),
+      this.lerp(this.perm[A] / 255, this.perm[B] / 255, u),
+      this.lerp(this.perm[A + 1] / 255, this.perm[B + 1] / 255, u),
       v
     );
   }
   
-  // Fractal noise for more complex terrain
-  fractalNoise(x: number, y: number, octaves = 4): number {
+  // Simplified fractal noise
+  fractalNoise(x: number, y: number, octaves: number): number {
     let value = 0;
     let amplitude = 1;
-    let frequency = 1;
-    let maxValue = 0;
     
     for (let i = 0; i < octaves; i++) {
-      value += this.noise(x * frequency, y * frequency) * amplitude;
-      maxValue += amplitude;
+      value += this.noise(x, y) * amplitude;
+      x *= 2;
+      y *= 2;
       amplitude *= 0.5;
-      frequency *= 2;
     }
     
-    return value / maxValue;
+    return value;
   }
 }
 
-export class StableWorldGenerator {
-  private heightNoise: StableNoise;
-  private caveNoise: StableNoise;
-  private oreNoise: StableNoise;
+class OptimizedStableWorldGenerator {
+  private heightNoise: OptimizedNoise;
   private chunkCache = new Map<string, Chunk>();
   
   constructor() {
-    console.log('🌍 StableWorldGenerator: Initializing realistic terrain generator');
-    this.heightNoise = new StableNoise(12345);
-    this.caveNoise = new StableNoise(54321);
-    this.oreNoise = new StableNoise(98765);
+    console.log('🌍 OptimizedStableWorldGenerator: Initializing performance-focused terrain generator');
+    this.heightNoise = new OptimizedNoise(12345);
   }
   
   generateChunk(chunkX: number, chunkZ: number): Chunk {
@@ -115,24 +89,26 @@ export class StableWorldGenerator {
     
     // Return cached chunk if available
     if (this.chunkCache.has(key)) {
-      console.log(`🔄 StableWorldGenerator: Using cached chunk (${chunkX}, ${chunkZ})`);
+      console.log(`🔄 OptimizedStableWorldGenerator: Using cached chunk (${chunkX}, ${chunkZ})`);
       return this.chunkCache.get(key)!;
     }
     
-    console.log(`⛏️  StableWorldGenerator: Generating new chunk (${chunkX}, ${chunkZ})`);
+    console.log(`⛏️  OptimizedStableWorldGenerator: Generating new chunk (${chunkX}, ${chunkZ})`);
     
     const blocks: Block[] = [];
     const heightMap = this.generateHeightMap(chunkX, chunkZ);
     
-    // Generate terrain for each column
+    // Generate only surface terrain (no deep underground)
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
         const worldX = chunkX * CHUNK_SIZE + x;
         const worldZ = chunkZ * CHUNK_SIZE + z;
         const height = heightMap[x][z];
         
-        // Generate blocks from bedrock to surface
-        for (let y = 0; y <= height; y++) {
+        // Only generate a few layers for performance
+        const startY = Math.max(height - 10, MIN_HEIGHT - 5);
+        
+        for (let y = startY; y <= height; y++) {
           const blockType = this.getBlockType(worldX, y, worldZ, height);
           
           if (blockType > 0) {
@@ -151,34 +127,35 @@ export class StableWorldGenerator {
       x: chunkX,
       z: chunkZ,
       blocks,
-      isReady: true
+      isReady: true,
+      isEmpty: blocks.length === 0
     };
     
-    // Cache the chunk for stability
     this.chunkCache.set(key, chunk);
-    console.log(`✅ StableWorldGenerator: Generated chunk (${chunkX}, ${chunkZ}) with ${blocks.length} blocks`);
+    console.log(`✅ OptimizedStableWorldGenerator: Generated chunk (${chunkX}, ${chunkZ}) with ${blocks.length} blocks`);
     
     return chunk;
   }
-    private generateHeightMap(chunkX: number, chunkZ: number): number[][] {
+  
+  private generateHeightMap(chunkX: number, chunkZ: number): number[][] {
     const heightMap: number[][] = [];
     
     for (let x = 0; x < CHUNK_SIZE; x++) {
       heightMap[x] = [];
       for (let z = 0; z < CHUNK_SIZE; z++) {
-        const worldX = (chunkX * CHUNK_SIZE + x) * 0.01;
-        const worldZ = (chunkZ * CHUNK_SIZE + z) * 0.01;
+        const worldX = (chunkX * CHUNK_SIZE + x) * 0.02;
+        const worldZ = (chunkZ * CHUNK_SIZE + z) * 0.02;
         
-        // Generate much simpler terrain with lower height variation
-        const baseHeight = this.heightNoise.fractalNoise(worldX, worldZ, 2);
-        const detailNoise = this.heightNoise.fractalNoise(worldX * 2, worldZ * 2, 1);
+        // Very simple height generation
+        const baseHeight = this.heightNoise.noise(worldX, worldZ);
+        const detailNoise = this.heightNoise.noise(worldX * 2, worldZ * 2) * 0.5;
         
-        // Much smaller height range for performance
+        // Much smaller height range
         let height = SEA_LEVEL;
         height += baseHeight * MOUNTAIN_HEIGHT;
         height += detailNoise * 2;
         
-        // Clamp to reasonable bounds - much lower max height
+        // Clamp to smaller bounds
         height = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, Math.floor(height)));
         heightMap[x][z] = height;
       }
@@ -186,26 +163,24 @@ export class StableWorldGenerator {
     
     return heightMap;
   }
+  
   private getBlockType(x: number, y: number, z: number, surfaceHeight: number): number {
-    // Much simpler block generation for performance
-    
-    // Don't generate blocks below a certain depth
-    if (y < MIN_HEIGHT - 5) return 0; // Air
+    // Super simple block generation
     
     // Surface layer
     if (y === surfaceHeight) return 1; // Grass
     
-    // Sub-surface layers (much thinner)
+    // Sub-surface layers (only 2-3 layers)
     if (y >= surfaceHeight - 2 && y < surfaceHeight) return 2; // Dirt
     
     // Stone layer (limited depth)
-    if (y >= surfaceHeight - 8 && y < surfaceHeight - 2) return 3; // Stone
+    if (y >= surfaceHeight - 6 && y < surfaceHeight - 2) return 3; // Stone
     
-    // Everything else is air (no deep terrain)
+    // Everything else is air
     return 0;
   }
   
-  // Check if there's a solid block at the given position
+  // Check if there's a solid block at position
   isBlockAt(x: number, y: number, z: number): boolean {
     const chunkX = Math.floor(x / CHUNK_SIZE);
     const chunkZ = Math.floor(z / CHUNK_SIZE);
@@ -225,7 +200,7 @@ export class StableWorldGenerator {
     return `${x},${z}`;
   }
   
-  // Get chunks in radius for stable loading
+  // Get chunks in radius for loading
   getChunksInRadius(centerX: number, centerZ: number, radius: number): Array<{x: number, z: number}> {
     const chunks: Array<{x: number, z: number}> = [];
     
@@ -241,6 +216,7 @@ export class StableWorldGenerator {
     return chunks;
   }
   
+  // Clear distant chunks to prevent memory leaks
   clearDistantChunks(centerX: number, centerZ: number, maxDistance: number): void {
     const toRemove: string[] = [];
     
@@ -256,10 +232,15 @@ export class StableWorldGenerator {
     
     toRemove.forEach(key => {
       this.chunkCache.delete(key);
-      console.log(`🗑️  StableWorldGenerator: Removed distant chunk ${key}`);
+      console.log(`🗑️  OptimizedStableWorldGenerator: Removed distant chunk ${key}`);
     });
+  }
+  
+  // Get cache size for monitoring
+  getCacheSize(): number {
+    return this.chunkCache.size;
   }
 }
 
-// Singleton instance for stability
-export const stableWorldGenerator = new StableWorldGenerator();
+// Export singleton instance
+export const optimizedStableWorldGenerator = new OptimizedStableWorldGenerator();

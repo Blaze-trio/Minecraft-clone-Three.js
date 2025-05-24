@@ -1,23 +1,16 @@
 import React, { useState } from 'react';
 import { GameErrorBoundary } from './GameHelpers';
 import { HighPerformanceWorld } from './HighPerformanceWorld';
-import { OptimizedMinecraftWorld } from './OptimizedMinecraftWorld';
 import { SimpleTestWorld } from './SimpleTestWorld';
 import StableMinecraftWorld from './StableMinecraftWorld';
 
-type GameMode = 'menu' | 'optimized' | 'stable' | 'highPerformance' | 'enhanced' | 'basic';
+type GameMode = 'menu' | 'stable' | 'highPerformance' | 'enhanced' | 'basic';
 
 const GameModeSelector: React.FC = () => {
   const [currentMode, setCurrentMode] = useState<GameMode>('menu');
 
   const renderGameMode = () => {
     switch (currentMode) {
-      case 'optimized':
-        return (
-          <GameErrorBoundary>
-            <OptimizedMinecraftWorld />
-          </GameErrorBoundary>
-        );
       case 'stable':
         return (
           <GameErrorBoundary>
@@ -33,17 +26,15 @@ const GameModeSelector: React.FC = () => {
       case 'enhanced':
         return (
           <GameErrorBoundary>
-            <SimpleTestWorld />
+            <StableMinecraftWorld />
           </GameErrorBoundary>
         );
       case 'basic':
-        return <div style={{
-          width: '100vw', height: '100vh', display: 'flex', 
-          alignItems: 'center', justifyContent: 'center',
-          background: '#87CEEB', color: 'white', fontSize: '24px'
-        }}>
-          🚧 Basic 3D World - Coming Soon
-        </div>;
+        return (
+          <GameErrorBoundary>
+            <SimpleTestWorld />
+          </GameErrorBoundary>
+        );
       case 'menu':
       default:
         return renderMenu();
@@ -115,44 +106,7 @@ const GameModeSelector: React.FC = () => {
               Stable chunk loading<br/>
               ⭐ NEW & RECOMMENDED
             </div>
-          </button>
-
-          {/* Optimized World */}
-          <button
-            onClick={() => setCurrentMode('optimized')}
-            style={{
-              padding: '20px',
-              background: 'linear-gradient(145deg, #4CAF50, #45a049)',
-              border: 'none',
-              borderRadius: '15px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '16px',
-              textAlign: 'center',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 5px 15px rgba(0,0,0,0.2)'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-5px)';
-              e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 5px 15px rgba(0,0,0,0.2)';
-            }}
-          >
-            <div style={{ fontSize: '2em', marginBottom: '10px' }}>⚡</div>
-            <div style={{ fontSize: '1.3em', fontWeight: 'bold', marginBottom: '8px' }}>
-              Optimized World
-            </div>
-            <div style={{ fontSize: '0.9em', opacity: 0.9 }}>
-              Complete optimized Minecraft clone<br/>
-              Physics, collision, chunk loading<br/>
-              🔧 Advanced
-            </div>
-          </button>
-
-          {/* High Performance Testing */}
+          </button>          {/* High Performance Testing */}
           <button
             onClick={() => setCurrentMode('highPerformance')}
             style={{
@@ -213,11 +167,10 @@ const GameModeSelector: React.FC = () => {
           >
             <div style={{ fontSize: '2em', marginBottom: '10px' }}>⚡</div>            <div style={{ fontSize: '1.3em', fontWeight: 'bold', marginBottom: '8px' }}>
               Enhanced World
-            </div>
-            <div style={{ fontSize: '0.9em', opacity: 0.9 }}>
-              Simple test world<br/>
-              Colored blocks without textures<br/>
-              🎯 Minimal & Fast
+            </div>            <div style={{ fontSize: '0.9em', opacity: 0.9 }}>
+              Stable chunk generation<br/>
+              Realistic terrain & physics<br/>
+              🎯 Reliable & Smooth
             </div>
           </button>
 
@@ -263,11 +216,10 @@ const GameModeSelector: React.FC = () => {
           background: 'rgba(0,0,0,0.2)',
           borderRadius: '10px',
           fontSize: '0.9em'
-        }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>🎯 Quick Start Guide:</div>
-          <div>• <strong>New to the game?</strong> Try "Optimized World" for the best experience</div>
+        }}>          <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>🎯 Quick Start Guide:</div>
+          <div>• <strong>New to the game?</strong> Try "Stable World" for the best experience</div>
           <div>• <strong>Performance testing?</strong> Use "Performance Test" for debugging</div>
-          <div>• <strong>Feature exploration?</strong> "Enhanced World" has full block interaction</div>
+          <div>• <strong>Feature exploration?</strong> "Enhanced World" has stable chunk generation</div>
           <div>• <strong>Development?</strong> "Basic 3D World" for minimal implementation</div>
         </div>
 

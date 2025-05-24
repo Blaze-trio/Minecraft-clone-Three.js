@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { PointerLockControls, Sky } from '@react-three/drei';
-import { stableWorldGenerator } from '../utils/stableWorldGenerator';
+import { optimizedStableWorldGenerator } from '../utils/optimizedStableWorldGenerator';
 import { SimpleChunkComponent } from './SimpleBlock';
 import { StablePlayerController } from './StablePlayerController';
 import { useHUDState, GameHUD, Crosshair, ControlsHint, HUDUpdater } from './GameHUD';
@@ -19,10 +19,9 @@ const StableChunkManager: React.FC<{
   const chunksRef = useRef(new Map<string, Chunk>());
   const loadingChunks = useRef(new Set<string>());
   const lastPlayerChunk = useRef({ x: 0, z: 0 });
-  
-  // Stable chunk loading parameters
-  const RENDER_DISTANCE = 4; // Smaller render distance for stability
-  const UNLOAD_DISTANCE = 6; // Don't unload chunks too aggressively
+    // Much smaller chunk loading parameters for performance
+  const RENDER_DISTANCE = 2; // Reduced from 4 - only 5x5 chunks max
+  const UNLOAD_DISTANCE = 4; // Unload chunks more aggressively
   
   const getPlayerChunk = useCallback(() => {
     return {
@@ -39,10 +38,9 @@ const StableChunkManager: React.FC<{
     }
     
     loadingChunks.current.add(key);
-    
-    try {
-      // Generate chunk synchronously for stability
-      const chunk = stableWorldGenerator.generateChunk(chunkX, chunkZ);
+      try {
+      // Use optimized generator for better performance
+      const chunk = optimizedStableWorldGenerator.generateChunk(chunkX, chunkZ);
       
       chunksRef.current.set(key, chunk);
       onChunksChange(new Map(chunksRef.current));
@@ -68,9 +66,8 @@ const StableChunkManager: React.FC<{
         toRemove.push(key);
       }
     }
-    
-    // Only unload if we have too many chunks
-    if (chunksRef.current.size > 25) {
+      // Only unload if we have too many chunks - much more aggressive
+    if (chunksRef.current.size > 12) { // Reduced from 25
       toRemove.forEach(key => {
         chunksRef.current.delete(key);
         console.log(`🗑️  StableChunkManager: Unloaded distant chunk ${key}`);
@@ -91,16 +88,15 @@ const StableChunkManager: React.FC<{
         playerChunk.z !== lastPlayerChunk.current.z) {
       
       lastPlayerChunk.current = playerChunk;
-      
-      // Load chunks in spiral pattern for smoother loading
-      const chunksToLoad = stableWorldGenerator.getChunksInRadius(
+        // Load chunks in spiral pattern for smoother loading
+      const chunksToLoad = optimizedStableWorldGenerator.getChunksInRadius(
         playerChunk.x, 
         playerChunk.z, 
         RENDER_DISTANCE
       );
       
       // Load new chunks
-      chunksToLoad.forEach(chunk => {
+      chunksToLoad.forEach((chunk: {x: number, z: number}) => {
         loadChunk(chunk.x, chunk.z);
       });
       
@@ -114,9 +110,9 @@ const StableChunkManager: React.FC<{
   return null;
 };
 
-// Main stable world component
+// Main stable world component with performance optimizations
 const StableMinecraftWorld: React.FC = () => {
-  const [playerPosition, setPlayerPosition] = useState<[number, number, number]>([8, 80, 8]);
+  const [playerPosition, setPlayerPosition] = useState<[number, number, number]>([8, 50, 8]); // Higher spawn
   const [chunks, setChunks] = useState<Map<string, Chunk>>(new Map());
   const hudState = useHUDState();
 
@@ -136,13 +132,12 @@ const StableMinecraftWorld: React.FC = () => {
   console.log(`🎮 StableMinecraftWorld: Rendering with ${visibleChunks.length} chunks, player at (${playerPosition[0].toFixed(1)}, ${playerPosition[1].toFixed(1)}, ${playerPosition[2].toFixed(1)})`);
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      <Canvas
+    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>      <Canvas
         camera={{ 
-          position: playerPosition, 
+          position: [8, 50, 8], // Match player spawn position
           fov: 75,
           near: 0.1,
-          far: 1000
+          far: 500 // Reduced from 1000
         }}
         gl={{ 
           antialias: false,
@@ -196,19 +191,21 @@ const StableMinecraftWorld: React.FC = () => {
           <HUDUpdater
             setHUDData={hudState.setHUDData}
             playerPosition={playerPosition}
-            renderDistance={4}
+            renderDistance={2}
             visibleChunks={visibleChunks.length}
             totalChunks={chunks.size}
-          />
-
-          {/* Memory Management */}
+          />{/* Memory Management */}
           <MemoryManager />
+          
+          {/* Performance Monitor - Must be inside Canvas for R3F hooks */}
+          <EnhancedWebGLMonitor setHUDData={hudState.setHUDData} />
         </Suspense>
-      </Canvas>      {/* UI Overlays */}
+      </Canvas>
+
+      {/* UI Overlays */}
       <Crosshair />
       <ControlsHint />
       <GameHUD hudData={hudState.hudData} />
-      <EnhancedWebGLMonitor setHUDData={hudState.setHUDData} />
 
       {/* Game Info */}
       <div style={{
