@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manual Geometry Debug Check</title>
+    <style>
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+        .result { margin: 10px 0; padding: 10px; background: #111; border: 1px solid #333; }
+        .success { border-color: #0f0; }
+        .warning { border-color: #ff0; }
+        .error { border-color: #f00; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Manual WebGL Geometry Debug Check</h1>
+    <p>This page lets you manually check WebGL memory stats in the browser console.</p>
+    
+    <div class="result">
+        <strong>Instructions:</strong><br>
+        1. Open Developer Tools (F12)<br>
+        2. Go to Console tab<br>
+        3. Click "Check Geometry Count" button below<br>
+        4. Look for the console output showing WebGL memory stats
+    </div>
+    
+    <button onclick="checkGeometry()" style="padding: 10px 20px; font-size: 16px; background: #0f0; color: #000; border: none; border-radius: 5px; cursor: pointer;">
+        Check Geometry Count
+    </button>
+    
+    <div id="results" style="margin-top: 20px;"></div>
+    
+    <script>
+        function checkGeometry() {
+            console.log('🔍 Manual Geometry Check Started');
+            
+            // Try to access any canvas on the page
+            const canvases = document.querySelectorAll('canvas');
+            console.log(`Found ${canvases.length} canvas elements`);
+            
+            canvases.forEach((canvas, index) => {
+                console.log(`Canvas ${index + 1}:`, canvas);
+                
+                // Try to get WebGL context
+                const gl = canvas.getContext('webgl') || canvas.getContext('webgl2') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    console.log(`Canvas ${index + 1} - WebGL context found:`, gl);
+                    if (gl.info) {
+                        const memory = gl.info.memory || {};
+                        const render = gl.info.render || {};
+                        
+                        console.log(`Canvas ${index + 1} - Memory Stats:`, {
+                            geometries: memory.geometries || 0,
+                            textures: memory.textures || 0,
+                            calls: render.calls || 0,
+                            triangles: render.triangles || 0
+                        });
+                        
+                        document.getElementById('results').innerHTML += `
+                            <div class="result ${memory.geometries > 0 ? 'warning' : 'success'}">
+                                <strong>Canvas ${index + 1} Results:</strong><br>
+                                Geometries: ${memory.geometries || 0}<br>
+                                Textures: ${memory.textures || 0}<br>
+                                Render Calls: ${render.calls || 0}<br>
+                                Triangles: ${render.triangles || 0}
+                            </div>
+                        `;
+                    } else {
+                        console.log(`Canvas ${index + 1} - No gl.info available`);
+                        document.getElementById('results').innerHTML += `
+                            <div class="result error">
+                                <strong>Canvas ${index + 1}:</strong> No gl.info available
+                            </div>
+                        `;
+                    }
+                } else {
+                    console.log(`Canvas ${index + 1} - No WebGL context`);
+                    document.getElementById('results').innerHTML += `
+                        <div class="result error">
+                            <strong>Canvas ${index + 1}:</strong> No WebGL context
+                        </div>
+                    `;
+                }
+            });
+            
+            if (canvases.length === 0) {
+                console.log('No canvas elements found on page');
+                document.getElementById('results').innerHTML = '<div class="result error">No canvas elements found on page</div>';
+            }
+            
+            console.log('🔍 Manual Geometry Check Completed');
+        }
+        
+        // Auto-run check after 3 seconds
+        setTimeout(() => {
+            console.log('Auto-running geometry check...');
+            checkGeometry();
+        }, 3000);
+    </script>
+</body>
+</html>

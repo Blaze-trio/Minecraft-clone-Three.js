@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Clone - Direct Test</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #87CEEB 0%, #6B9FE8 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        .status {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 600px;
+        }
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .button:hover {
+            background: #45a049;
+        }
+        .error {
+            background: rgba(255,0,0,0.2);
+            border: 1px solid #ff6b6b;
+        }
+        .success {
+            background: rgba(0,255,0,0.2);
+            border: 1px solid #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="status" id="status">
+        <h1>🎮 Minecraft Clone - Module Test</h1>
+        <p>Testing module loading capabilities...</p>
+        <div id="results"></div>
+        <button class="button" onclick="testModules()">🔍 Test Module Loading</button>
+        <button class="button" onclick="window.location.href='/'">🎮 Back to Game</button>
+    </div>
+
+    <script>
+        async function testModules() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Testing modules...</p>';
+            
+            const tests = [
+                { name: 'React', module: 'react' },
+                { name: 'React DOM', module: 'react-dom' },
+                { name: 'Three.js', module: 'three' },
+                { name: 'React Three Fiber', module: '@react-three/fiber' },
+                { name: 'React Three Drei', module: '@react-three/drei' },
+                { name: 'Simplex Noise', module: 'simplex-noise' }
+            ];
+            
+            let testResults = '<h3>Module Loading Test Results:</h3><ul>';
+            
+            for (const test of tests) {
+                try {
+                    await import(`/node_modules/.vite/deps/${test.module.replace('@', '_').replace('/', '_')}.js`);
+                    testResults += `<li style="color: #4CAF50;">✅ ${test.name}: OK</li>`;
+                } catch (error) {
+                    testResults += `<li style="color: #ff6b6b;">❌ ${test.name}: ${error.message}</li>`;
+                }
+            }
+            
+            testResults += '</ul>';
+            testResults += '<p><strong>If all modules show OK, the game should work in your browser!</strong></p>';
+            
+            results.innerHTML = testResults;
+        }
+        
+        // Test WebGL support
+        function testWebGL() {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            return !!gl;
+        }
+        
+        // Display browser compatibility info
+        document.addEventListener('DOMContentLoaded', () => {
+            const webglSupport = testWebGL();
+            const browserInfo = `
+                <p><strong>Browser:</strong> ${navigator.userAgent.split(' ').pop()}</p>
+                <p><strong>WebGL Support:</strong> ${webglSupport ? '✅ Yes' : '❌ No'}</p>
+                <p><strong>Local Storage:</strong> ${typeof Storage !== 'undefined' ? '✅ Yes' : '❌ No'}</p>
+            `;
+            
+            document.getElementById('results').innerHTML = browserInfo;
+        });
+    </script>
+</body>
+</html>

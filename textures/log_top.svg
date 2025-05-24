@@ -1,0 +1,8 @@
+<!-- Simple SVG placeholder for log top texture -->
+<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+  <rect width="16" height="16" fill="#8B4513"/>
+  <circle cx="8" cy="8" r="6" fill="#D2691E" stroke="#654321" stroke-width="1"/>
+  <circle cx="8" cy="8" r="4" fill="#CD853F" stroke="#654321" stroke-width="0.5"/>
+  <circle cx="8" cy="8" r="2" fill="#DEB887" stroke="#654321" stroke-width="0.5"/>
+  <circle cx="8" cy="8" r="0.5" fill="#654321"/>
+</svg>
