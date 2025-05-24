@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import type { HUDData } from './GameHUD';
+import { attemptContextRecovery } from '../utils/webglUtils';
 
 interface WebGLContextManagerProps {
   setHUDData: React.Dispatch<React.SetStateAction<HUDData>>;
@@ -26,8 +27,7 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
     if (!gl || !gl.domElement) return;
     
     const canvas = gl.domElement;
-    
-    const handleContextLost = (event: Event) => {
+      const handleContextLost = (event: Event) => {
       // Prevent default behavior
       event.preventDefault();
       
@@ -37,7 +37,7 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
       
       console.warn(`WebGL context lost (count: ${contextLostCount.current})`);
       
-      // Update HUD status
+      // Update HUD status immediately
       setHUDData(prev => ({
         ...prev,
         webglContextStatus: 'lost'
@@ -46,6 +46,12 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
       // Notify parent component if callback provided
       if (onContextLost) {
         onContextLost();
+      }
+      
+      // Prevent rapid context loss cycles
+      if (contextLostCount.current > 3 && Date.now() - lastContextLoss.current < 10000) {
+        console.error('Too many context losses in a short period. Consider using 2D fallback mode.');
+        return;
       }
       
       // Attempt to recover renderer by forcing a memory cleanup
@@ -85,9 +91,7 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
         ...prev,
         webglContextStatus: 'warning'
       }));
-    };
-    
-    const handleContextRestored = () => {
+    };    const handleContextRestored = () => {
       console.log("WebGL context restored!");
       
       // Update HUD status
@@ -98,6 +102,52 @@ export const WebGLContextManager: React.FC<WebGLContextManagerProps> = ({
       
       // Reset recovery flag
       isRecovering.current = false;
+      
+      // Notify parent that context was restored
+      if (onContextRestored) {
+        onContextRestored();
+      }
+      
+      // Reinitialize renderer with optimized settings
+      try {
+        // Set conservative rendering parameters
+        gl.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+        gl.shadowMap.enabled = false;
+        gl.shadowMap.autoUpdate = false;
+        
+        // Notify parent that context was restored
+        if (onContextRestored) {
+          onContextRestored();
+        }
+      } catch (err) {
+        console.warn('Error reinitializing renderer after context restore:', err);
+      }
+      
+      // Reinitialize renderer with optimized settings
+      try {
+        // Set conservative rendering parameters
+        gl.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+        gl.shadowMap.enabled = false;
+        gl.shadowMap.autoUpdate = false;
+        
+        // Force a clear to ensure proper state
+        gl.clear();
+      } catch (err) {
+        console.warn('Error reinitializing renderer after context restore:', err);
+      }
+      
+      // Reinitialize renderer with optimized settings
+      try {
+        // Set conservative rendering parameters
+        gl.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+        gl.shadowMap.enabled = false;
+        gl.shadowMap.autoUpdate = false;
+        
+        // Force a clear to ensure proper state
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      } catch (err) {
+        console.warn('Error reinitializing renderer after context restore:', err);
+      }
       
       // Notify parent component if callback provided
       if (onContextRestored) {

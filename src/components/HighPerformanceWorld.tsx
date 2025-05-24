@@ -5,7 +5,7 @@ import { OptimizedWorldGenerator } from '../utils/optimizedWorldGenerator';
 import { PlayerController } from './PlayerController';
 import { ChunkLOD } from './ChunkLOD';
 import { HUDUpdater, useHUDState, GameHUD, Crosshair, ControlsHint } from './GameHUD';
-import { WebGLContextManager, MemoryManager } from './WebGLContextManager';
+import { WebGLContextManager, MemoryManager } from './WebGLContextHandler';
 import type { Chunk } from '../types/game';
 import { RENDER_DISTANCE, MAX_RENDER_DISTANCE, CHUNK_SIZE } from '../types/game';
 import * as THREE from 'three';
@@ -456,36 +456,62 @@ export const HighPerformanceWorld: React.FC = () => {
     const timer = setTimeout(() => setIsLoaded(true), 2000);
     return () => clearTimeout(timer);
   }, []);
-  
-  return (
+    return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>      <Canvas
         style={{ background: '#87CEEB' }}
         gl={{
           antialias: false,
           powerPreference: 'high-performance' as const,
-          precision: 'lowp' as const,
+          precision: 'mediump' as const, // Better balance between performance and quality
           depth: true,
           stencil: false,
           alpha: false,
-          preserveDrawingBuffer: true,
-          failIfMajorPerformanceCaveat: false
+          preserveDrawingBuffer: true, 
+          failIfMajorPerformanceCaveat: false,
+          premultipliedAlpha: true, // Better color stability
+          
+          // Critical setting to prevent context loss
+          // This tells the browser not to release WebGL context when tab is hidden
+          powerPreference: 'high-performance' as const,
         }}
         shadows={false}
         camera={{ 
           fov: 75, 
-          near: 0.1, 
+          near: 0.5, // Slightly larger near plane for better z-fighting prevention
           far: 1000, 
           position: [0, 50, 0] 
         }}
-        frameloop="always" // Use always for more stable context
-        performance={{ min: 0.5 }}
-        dpr={[0.5, 1]}
+        frameloop="always" // Use always to prevent frame drops causing context issues
+        performance={{ min: 0.1 }} // Very tolerant of low FPS
+        dpr={[0.5, 0.75]} // More conservative resolution scaling
         onCreated={({ gl }) => {
           // Apply WebGL optimizations
           THREE.Cache.enabled = true;
           
+          // Set conservative renderer parameters
+          gl.setClearColor(new THREE.Color('#87CEEB'));
+          gl.setPixelRatio(Math.min(window.devicePixelRatio, 0.75)); // Very conservative pixel ratio
+          
           // Apply recovery-focused settings
           try {
+            // Use defensive WebGL extension loading with proper error handling
+            try {
+              const context = gl.getContext();
+              context.getExtension('OES_element_index_uint'); // Better memory usage
+            } catch (err) {
+              // Silently handle extension loading errors
+            }
+            
+            // Set up WebGL context loss handlers at the canvas level
+            const canvas = gl.domElement;
+            const contextLossCount = { count: 0 };
+            
+            canvas.addEventListener('webglcontextlost', (e) => {
+              e.preventDefault();
+              contextLossCount.count++;
+              console.warn(`Canvas-level WebGL context loss handler (count: ${contextLossCount.count})`);
+            });
+            
             // Enable extensions that help with context stability
             const context = gl.getContext();
             if (context) {

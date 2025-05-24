@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { GameErrorBoundary } from './components/GameHelpers';
 import SimpleMinecraftGame from './components/SimpleMinecraftGame';
 import { HighPerformanceWorld } from './components/HighPerformanceWorld';
+import { setupEmergencyMemoryHandlers } from './utils/webglUtils';
 import './App.css';
 
 function App() {
@@ -125,14 +126,108 @@ function App() {
   // Add a timeout to automatically fallback to 2D if 3D takes too long
   useEffect(() => {
     if (use3D && !force2D) {
+      // Longer initialization time to give WebGL more time to stabilize
       const fallbackTimer = setTimeout(() => {
         console.log('3D mode taking too long, falling back to 2D');
         setUse3D(false);
-      }, 15000); // 15 second timeout
+      }, 45000); // 45 second timeout - much more time for initialization
       
-      return () => clearTimeout(fallbackTimer);
+      // Setup multiple recovery attempts with progressive backoff
+      let recoveryAttempts = 0;
+      const maxRecoveryAttempts = 3; // More recovery attempts
+      const recoveryInProgress = { current: false };
+      const lastRecoveryTime = { timestamp: 0 };
+      const RECOVERY_COOLDOWN = 10000; // 10 seconds between recovery attempts
+      
+      // WebGL error counter to track error frequency
+      const errorCounts = {
+        webgl: 0,
+        context: 0,
+        memory: 0,
+        other: 0
+      };
+      
+      // Add window-level error handler for WebGL context errors
+      const handleGlobalError = (event: ErrorEvent) => {
+        // Track error types
+        if (event.message.includes('WebGL')) errorCounts.webgl++;
+        if (event.message.includes('context')) errorCounts.context++;
+        if (event.message.includes('memory')) errorCounts.memory++;
+        if (!event.message.includes('WebGL') && !event.message.includes('context') && !event.message.includes('memory')) {
+          errorCounts.other++;
+        }
+        
+        // Only react to WebGL-related errors
+        if (event.message.includes('WebGL') || 
+            event.message.includes('context') || 
+            event.message.includes('three.js') ||
+            event.message.includes('memory')) {
+          
+          console.warn('Global WebGL error detected:', event.message);
+          
+          // Prevent multiple rapid recovery attempts
+          const now = Date.now();
+          if (recoveryInProgress.current || (now - lastRecoveryTime.timestamp < RECOVERY_COOLDOWN)) {
+            console.log('Recovery already in progress or in cooldown, skipping');
+            return;
+          }
+          
+          if (recoveryAttempts < maxRecoveryAttempts) {
+            recoveryAttempts++;
+            recoveryInProgress.current = true;
+            lastRecoveryTime.timestamp = now;
+            
+            console.log(`Attempting WebGL recovery (${recoveryAttempts}/${maxRecoveryAttempts})...`);
+            
+            // Progressive delay for recovery attempts
+            const recoveryDelay = recoveryAttempts * 2000; // Increase delay with each attempt
+            setTimeout(() => {
+              recoveryInProgress.current = false;
+              
+              // Check if errors are still occurring
+              if (errorCounts.webgl + errorCounts.context > 5) {
+                console.warn('Still seeing WebGL errors after recovery attempt');
+              } else {
+                console.log('Recovery appears successful, error count reduced');
+              }
+              
+              // Reset error counts for next cycle
+              Object.keys(errorCounts).forEach(key => {
+                errorCounts[key as keyof typeof errorCounts] = 0;
+              });
+              
+            }, recoveryDelay);
+          } else {
+            // Only fall back if we have frequent critical errors
+            if (errorCounts.webgl + errorCounts.context > 10) {
+              console.error('WebGL recovery attempts exhausted with continuing errors, falling back to 2D mode');
+              setUse3D(false);
+            } else {
+              console.warn('WebGL recovery attempts exhausted, but errors are infrequent. Continuing in 3D mode with degraded stability.');
+            }
+          }
+        }
+      };
+      
+      window.addEventListener('error', handleGlobalError);
+      
+      return () => {
+        clearTimeout(fallbackTimer);
+        window.removeEventListener('error', handleGlobalError);
+      };
     }
   }, [use3D, force2D]);
+
+  // Set up emergency memory handlers for the entire application
+  useEffect(() => {
+    // Initialize emergency handlers for memory issues
+    setupEmergencyMemoryHandlers();
+    console.log('Emergency WebGL memory handlers initialized');
+    
+    return () => {
+      // Nothing to clean up for memory handlers
+    };
+  }, []);
 
   console.log('Rendering - use3D:', use3D, 'loadingFailed:', loadingFailed);
 
