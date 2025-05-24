@@ -235,13 +235,11 @@ export class WebGLMonitor {
    * Start monitoring WebGL usage with progressive frequency
    */
   public startMonitoring(): void {
-    if (!this.renderer) return;
-    
-    // Start with very gentle monitoring during initial load
-    const STABILIZATION_DELAY = 15000; // 15 seconds to let the app fully initialize
-    const INITIAL_CHECK_DELAY = 8000;  // 8 seconds for first check
-    const NORMAL_CHECK_INTERVAL = 5000; // Standard 5 second interval (increased from 3s)
-    const AGGRESSIVE_CHECK_INTERVAL = 2000; // Aggressive 2 second interval (increased from 1.5s)
+    if (!this.renderer) return;    // More responsive monitoring, especially for high-geometry voxel worlds
+    const STABILIZATION_DELAY = 10000; // 10 seconds to let the app initialize (reduced from 15s)
+    const INITIAL_CHECK_DELAY = 5000;  // 5 seconds for first check (reduced from 8s)
+    const NORMAL_CHECK_INTERVAL = 4000; // Standard 4 second interval (reduced from 5s)
+    const AGGRESSIVE_CHECK_INTERVAL = 1500; // Aggressive 1.5 second interval (reduced from 2s)
 
     // Track startup phase to be more gentle with new applications
     const startupTime = Date.now();
@@ -300,8 +298,7 @@ export class WebGLMonitor {
       clearInterval(this.memoryCheckInterval);
       this.memoryCheckInterval = null;
     }
-  }
-  /**
+  }    /**
    * Check memory usage from renderer and take actions if needed
    * @param gentleCheck If true, perform a gentle check with higher thresholds and fewer actions
    */
@@ -323,60 +320,82 @@ export class WebGLMonitor {
       // Calculate memory usage with weighted factors (more accurate estimate)
       const memoryUsage = (geometries * 0.8) + (textures * 3) + (programs * 0.5); // Weighted units
       
-      // Track memory peaks
+      // Track memory peaks and calculate growth rate
+      let growthRate = 1.0;
       if (memoryUsage > 0) {
+        if (this.lastMemoryUsage > 0) {
+          growthRate = memoryUsage / this.lastMemoryUsage;
+        }
+        
         this.memoryPeaks.push(memoryUsage);
         if (this.memoryPeaks.length > 10) {
           this.memoryPeaks.shift();
         }
       }
       
-      // Check absolute limits regardless of growth rate
-      // This is critical for Minecraft-like voxel worlds which can grow too large
-      const ABSOLUTE_GEO_LIMIT = 40000; // Reduced from default 100k to 40k
-      const ABSOLUTE_TEX_LIMIT = 1000;
+      // For voxel worlds, geometry count is the most critical factor to track
+      // Much more aggressive limits for voxel-based Minecraft-type worlds
+      const MEDIUM_GEO_LIMIT = 20000;   // Warning level
+      const HIGH_GEO_LIMIT = 25000;     // High concern level
+      const CRITICAL_GEO_LIMIT = 30000; // Critical level
       
-      const isGeometryExcessive = geometries > ABSOLUTE_GEO_LIMIT;
-      const isTextureExcessive = textures > ABSOLUTE_TEX_LIMIT;
+      // Track multi-level severity
+      const isGeometryMedium = geometries > MEDIUM_GEO_LIMIT;
+      const isGeometryHigh = geometries > HIGH_GEO_LIMIT;
+      const isGeometryCritical = geometries > CRITICAL_GEO_LIMIT;
       
-      if ((isGeometryExcessive || isTextureExcessive) && !gentleCheck) {
-        console.error(`Absolute resource limit exceeded: Geometries: ${geometries}/${ABSOLUTE_GEO_LIMIT}, Textures: ${textures}/${ABSOLUTE_TEX_LIMIT}`);
-        this.performEmergencyRecovery();
-      }
-      
-      // Check for memory anomalies (but skip warnings during gentle check)
-      if (this.lastMemoryUsage > 0 && !gentleCheck) {
-        // Calculate growth rate
-        const growthRate = memoryUsage / this.lastMemoryUsage;
-        
-        // Adjust thresholds based on current memory pressure
-        const adjustedWarningThreshold = this.memoryPeaks.length < 3 ? 
-          this.warningThreshold * 1.5 : this.warningThreshold; // More tolerant initially
+      // React based on severity level, but respect gentle check flag
+      if (!gentleCheck) {
+        // Critical level - requires emergency action
+        if (isGeometryCritical) {
+          console.error(`CRITICAL geometry limit exceeded: ${geometries} geometries`);
+          this.performEmergencyRecovery();
           
-        const adjustedCriticalThreshold = this.memoryPeaks.length < 3 ?
-          this.criticalThreshold * 1.5 : this.criticalThreshold; // More tolerant initially
-        
-        // Warning level - significant increase
-        if (growthRate > adjustedWarningThreshold) {
-          console.warn(`Memory pressure warning: ${memoryUsage.toFixed(0)} units (was ${this.lastMemoryUsage.toFixed(0)}, increase: ${((growthRate-1)*100).toFixed(0)}%)`);
+          // Notify application of critical memory status via event
+          try {
+            window.dispatchEvent(new CustomEvent('webgl-geometry-critical', { 
+              detail: { count: geometries, limit: CRITICAL_GEO_LIMIT } 
+            }));
+          } catch (e) {
+            // Ignore event dispatch errors
+          }
+        }
+        // High level - requires strong action
+        else if (isGeometryHigh) {
+          console.warn(`HIGH geometry limit exceeded: ${geometries} geometries`);
+          
+          // If growing quickly, perform emergency recovery
+          if (growthRate > 1.2) {
+            console.error(`Rapid geometry growth at high levels: +${((growthRate-1)*100).toFixed(0)}%`);
+            this.performEmergencyRecovery();
+          } else {
+            this.performLightCleanup();
+          }
+        }
+        // Medium level - requires light action
+        else if (isGeometryMedium) {
+          console.warn(`Approaching geometry limits: ${geometries} geometries`);
           this.performLightCleanup();
         }
         
-        // Critical level - severe increase
-        if (growthRate > adjustedCriticalThreshold) {
-          console.error(`Critical memory pressure: ${memoryUsage.toFixed(0)} units (was ${this.lastMemoryUsage.toFixed(0)}, increase: ${((growthRate-1)*100).toFixed(0)}%)`);
-          this.performEmergencyRecovery();
+        // Also check for growth spikes regardless of absolute level
+        const absoluteGrowth = memoryUsage - this.lastMemoryUsage;
+        if (absoluteGrowth > 5000) {
+          console.warn(`Large memory spike detected: +${absoluteGrowth.toFixed(0)} units`);
+          this.performLightCleanup();
         }
       }
       
       this.lastMemoryUsage = memoryUsage;
       
       // Log memory usage with more useful information for debugging
+      // Include growthRate in the log to help track memory trends
       console.log(
         `WebGL memory: ${memoryUsage.toFixed(0)} units ` +
         `[Geometries: ${geometries}, Textures: ${textures}, ` +
         `Triangles: ${(triangles/1000).toFixed(1)}k], ` +
-        `FPS: ${this.smoothedFps.toFixed(1)}`
+        `FPS: ${this.smoothedFps.toFixed(1)}` +
+        (growthRate !== 1.0 ? `, Growth: ${((growthRate-1)*100).toFixed(1)}%` : '')
       );
       
     } catch (e) {

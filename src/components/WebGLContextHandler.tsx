@@ -311,19 +311,25 @@ export const MemoryManager: React.FC = () => {
         calls: gl.info.render?.calls || 0,
         triangles: gl.info.render?.triangles || 0
       };
-      
-      // Compare with previous cycle and detect trends
+        // Compare with previous cycle and detect trends
       const prevStats = previousMemStats.current;
       
       // Check if resources are continuously increasing
       const geoGrowth = currentStats.geometries - prevStats.geometries;
       const texGrowth = currentStats.textures - prevStats.textures;
       const callGrowth = currentStats.calls - prevStats.calls;
-        // Update growth trend detector (but be more conservative initially)
-      const isEarlyPhase = cleanupCycleRef.current <= 5;
+      
+      // Track significant growth for reporting
+      if (geoGrowth > 1000) {
+        console.warn(`Geometry growth spike: +${geoGrowth} geometries`);
+      }
+        
+      // Update growth trend detector (more aggressive detection)
+      const isEarlyPhase = cleanupCycleRef.current <= 3; // Reduced from 5 to 3
       resourcesGrowing.current = !isEarlyPhase && (
         (geoGrowth > 0 && texGrowth > 0) || 
-        (cleanupCycleRef.current > 2 && (geoGrowth > 100 || texGrowth > 10))
+        (geoGrowth > 50) ||  // Much more aggressive - detect smaller growth
+        (cleanupCycleRef.current > 2 && (geoGrowth > 50 || texGrowth > 5)) // Lower thresholds
       );
       
       // Log memory usage at increasing frequency based on cycle
@@ -335,37 +341,38 @@ export const MemoryManager: React.FC = () => {
       if (resourcesGrowing.current && cleanupCycleRef.current > 3) {
         console.warn(`Resource growth detected - G:${geoGrowth}, T:${texGrowth}, C:${callGrowth}`);
         performCleanup(cleanupCycleRef.current, resourcesGrowing.current);
-      }      // Detect sudden spike in resource usage (but ignore initial loading)
-      const hasBaseline = cleanupCycleRef.current > 3; // Wait more cycles before spike detection
+      }      // Detect sudden spike in resource usage (respond more quickly)
+      const hasBaseline = cleanupCycleRef.current > 2; // Start spike detection earlier (was 3)
       
       // Adaptive thresholds based on the current geometry count
-      const baseGeoLimit = Math.max(10000, prevStats.geometries); // Higher base threshold
-      const baseTexLimit = Math.max(100, prevStats.textures);
+      const baseGeoLimit = Math.max(8000, prevStats.geometries); // Lower base threshold (was 10000)
+      const baseTexLimit = Math.max(50, prevStats.textures); // Lower texture threshold (was 100)
       
-      // Define growth rate thresholds that scale down as counts get larger
-      const geoGrowthFactor = prevStats.geometries > 50000 ? 1.25 : 
-                             prevStats.geometries > 20000 ? 1.5 : 1.8;
+      // Define more aggressive growth rate thresholds that scale down as counts get larger
+      const geoGrowthFactor = prevStats.geometries > 40000 ? 1.15 : // More sensitive at high levels
+                             prevStats.geometries > 25000 ? 1.25 :
+                             prevStats.geometries > 15000 ? 1.4 : 1.6;
       
       const isGeometrySpike = hasBaseline && 
                              (currentStats.geometries > baseGeoLimit * geoGrowthFactor) &&
-                             (geoGrowth > 5000); // Require absolute growth too
+                             (geoGrowth > 2500); // Require less absolute growth to trigger (was 5000)
                              
       const isTextureSpike = hasBaseline && 
-                            currentStats.textures > baseTexLimit * 1.8 && 
-                            texGrowth > 20;
+                            currentStats.textures > baseTexLimit * 1.5 && // More sensitive (was 1.8)
+                            texGrowth > 10; // Lower threshold (was 20)
                             
-      // More conservative render call threshold
-      const isCallSpike = hasBaseline && currentStats.calls > 5000;
+      // More aggressive render call threshold
+      const isCallSpike = hasBaseline && currentStats.calls > 3500; // Lower threshold (was 5000)
       
       // Check for severe conditions needing immediate attention
       if (isGeometrySpike || isTextureSpike || isCallSpike) {
         console.warn(`Memory spike detected: Geo: ${isGeometrySpike ? 'YES' : 'no'} (${geoGrowth}), Tex: ${isTextureSpike ? 'YES' : 'no'} (${texGrowth}), Calls: ${isCallSpike ? 'YES' : 'no'} (${currentStats.calls})`);
         emergencyCycleRef.current = true;
         performCleanup(cleanupCycleRef.current, true);
-      }
-        // Also check for absolute thresholds that would cause problems - much more aggressive limits
-      const isAbsolutelyTooManyGeometries = currentStats.geometries > 50000; // Reduced from 100000 to 50000
-      const isGrowthTooDangerous = prevStats.geometries > 30000 && geoGrowth > 10000; // Dangerous growth rate at high counts
+      }        // Much more aggressive absolute limits for geometry counts
+      const isAbsolutelyTooManyGeometries = currentStats.geometries > 30000; // Reduced from 50000 to 30000
+      const isGrowthTooDangerous = prevStats.geometries > 20000 && geoGrowth > 5000; // Lower thresholds (was 30k/10k)
+      const isCriticalGeometryLevel = currentStats.geometries > 25000; // New critical threshold
       
       if ((isAbsolutelyTooManyGeometries || isGrowthTooDangerous) && !emergencyCycleRef.current) {
         console.warn(`Critical geometry threshold reached: ${currentStats.geometries} geometries (growth: ${geoGrowth})`);
@@ -379,6 +386,25 @@ export const MemoryManager: React.FC = () => {
           if (gl && scene) {
             console.warn("Performing second emergency cleanup pass");
             performCleanup(cleanupCycleRef.current, true);
+          }
+          
+          // Force a third cleanup for extreme situations
+          if (isCriticalGeometryLevel) {
+            setTimeout(() => {
+              if (gl && scene) {
+                console.warn("Performing THIRD emergency cleanup pass - critical geometry levels");
+                performCleanup(cleanupCycleRef.current, true);
+                
+                // After extreme cleanup, notify any external systems that can reduce geometry generation
+                try {
+                  window.dispatchEvent(new CustomEvent('webgl-memory-critical', {
+                    detail: { geometries: currentStats.geometries }
+                  }));
+                } catch (e) {
+                  // Ignore errors in event dispatching
+                }
+              }
+            }, 1000);
           }
         }, 500);
       }
@@ -446,22 +472,33 @@ export const MemoryManager: React.FC = () => {
           for (let i = 0; i < children.length; i++) {
             const object = children[i];
             if (!object) continue; // Skip if undefined (shouldn't happen)
-            
-            if (object instanceof THREE.Mesh) {              // Handle invisible, low-priority or distant objects
+              if (object instanceof THREE.Mesh) {
+              // Handle invisible, low-priority or distant objects
               const isLowPriority = object.userData.priority === 'low'; 
               const isInvisible = !object.visible;
               const isDistant = object.userData.distance && object.userData.distance > distanceThreshold;
               
-              // Determine if this object should be cleaned up
-              const shouldDispose = isInvisible || isLowPriority || (isDistant && (aggressive || currentGeometries > 30000));
+              // More aggressive distance thresholds in extreme situations
+              const isExtremelyDistant = object.userData.distance && object.userData.distance > distanceThreshold * 0.5;
+              
+              // Much more aggressive cleanup thresholds
+              const shouldDispose = isInvisible || 
+                                   isLowPriority || 
+                                   (isDistant && (aggressive || currentGeometries > 25000)) || // Lower threshold from 30k to 25k
+                                   (isExtremelyDistant && currentGeometries > 20000); // New emergency threshold at 20k
               
               if (shouldDispose) {
                 objectsToDispose.push(object);
                 
-                // Mark for removal from scene if it's truly unneeded
-                if ((aggressive || currentGeometries > 40000) && 
-                    object.parent && 
-                    (isLowPriority || isInvisible || (isDistant && currentGeometries > 45000))) {
+                // Be more aggressive about removing objects completely from scene
+                const shouldRemove = (aggressive || currentGeometries > 30000) && // Lower threshold from 40k to 30k
+                                   object.parent && 
+                                   (isLowPriority || 
+                                    isInvisible || 
+                                    (isDistant && currentGeometries > 25000) || // Lower threshold from 45k to 25k
+                                    (isExtremelyDistant && aggressive));
+                
+                if (shouldRemove) {
                   objectsToRemove.push(object);
                 }
               }
@@ -540,33 +577,61 @@ export const MemoryManager: React.FC = () => {
     } catch (cleanupError) {
       console.error('Error during cleanup operation:', cleanupError);
     }    
-    
-    // Reset renderer info on aggressive cleanup
+      // Reset renderer info on aggressive cleanup
     if (aggressive) {
       try {
         // Force garbage collection indirectly using multiple approaches
         // This creates temporary memory pressure that encourages browser GC
-        const tempArrays = [];
-        for (let i = 0; i < 3; i++) {
-          const arr = new Array(500000);
-          arr.fill(0);
-          tempArrays.push(arr);
-        }
+        console.log("Forcing aggressive GC - current geometries:", gl.info?.memory?.geometries || 0);
         
-        // Release all references
-        tempArrays.length = 0;
+        // Multiple phase GC trigger for maximum effectiveness
+        const forceGarbageCollection = () => {
+          const tempArrays = [];
+          for (let i = 0; i < 5; i++) {  // More arrays (was 3)
+            const arr = new Array(1000000); // Larger arrays (was 500k)
+            arr.fill(Math.random());  // More complex fill to pressure memory
+            tempArrays.push(arr);
+          }
+          
+          // Create and release complex objects
+          for (let i = 0; i < 10; i++) {
+            const complexObj = {};
+            for (let j = 0; j < 1000; j++) {
+              (complexObj as any)[`key_${j}`] = `value_${Math.random()}`;
+            }
+            tempArrays.push(complexObj);
+          }
+          
+          // Release all references
+          tempArrays.length = 0;
+        };
         
-        // Reset render info
+        // Reset render info immediately
         if (gl.info) {
           gl.info.reset();
         }
         
-        // Request animation frame to trigger potential browser GC
-        requestAnimationFrame(() => {
-          // Additional forced cleanup
-          if (gl.info) gl.info.reset();
+        // First GC trigger
+        forceGarbageCollection();
+        
+        // Second trigger after a short delay
+        setTimeout(() => {
+          forceGarbageCollection();
           THREE.Cache.clear();
-        });
+          
+          // Reset WebGLRenderer state to help release GPU resources
+          gl.setRenderTarget(null); 
+          gl.clear();
+          
+          // Request animation frame for final cleanup
+          requestAnimationFrame(() => {
+            if (gl.info) gl.info.reset();
+            THREE.Cache.clear();
+            
+            // Report results
+            console.log("GC completed - current geometries:", gl.info?.memory?.geometries || 0);
+          });
+        }, 100);
       } catch (gcError) {
         console.warn('Error during garbage collection attempt:', gcError);
       }

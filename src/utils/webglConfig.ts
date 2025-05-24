@@ -23,24 +23,29 @@ export const WEBGL_RENDERER_CONFIG = {
 // Memory usage limits for voxel-based games
 export const VOXEL_MEMORY_CONFIG = {
   // Maximum resource counts before action is needed
-  MAX_GEOMETRY_COUNT: 50000,  // Reduced from 100k to 50k based on real-world testing
+  MAX_GEOMETRY_COUNT: 30000,  // Much more aggressive limit (was 50000)
   MAX_TEXTURE_COUNT: 1000,
   MAX_RENDER_CALLS: 5000,     // Keep draw calls reasonable
-  DANGER_GEOMETRY_COUNT: 40000, // Threshold for entering danger zone
+  DANGER_GEOMETRY_COUNT: 25000, // Lower threshold for entering danger zone (was 40000)
+  WARNING_GEOMETRY_COUNT: 20000, // New warning threshold
   
   // Memory spike detection thresholds (percentage increase)
-  MEMORY_SPIKE_THRESHOLD: 30, // 30% increase in one cycle
+  MEMORY_SPIKE_THRESHOLD: 20, // More sensitive spike detection (was 30%)
   
   // Chunk management to prevent excessive geometry
   MAX_CHUNKS_LOW_END: 9,      // For low-end devices
   MAX_CHUNKS_MID_RANGE: 16,   // For mid-range devices
-  MAX_CHUNKS_HIGH_END: 36,    // For high-end devices (reduced from 64)
+  MAX_CHUNKS_HIGH_END: 25,    // Reduced from 36 to 25 for high-end devices
   
   // Dynamic LOD settings to reduce geometry count
   ENABLE_LOD: true,
-  LOD_DISTANCE_NEAR: 32,      // Full detail distance
-  LOD_DISTANCE_MID: 64,       // Medium detail distance
-  LOD_DISTANCE_FAR: 128,      // Low detail distance
+  LOD_DISTANCE_NEAR: 24,      // Reduced full detail distance (was 32)
+  LOD_DISTANCE_MID: 48,       // Reduced medium detail distance (was 64) 
+  LOD_DISTANCE_FAR: 96,       // Reduced low detail distance (was 128)
+  
+  // Maximum geometry per chunk to prevent excessive detail
+  MAX_GEOMETRY_PER_CHUNK: 1200, // Limit blocks per chunk
+  SIMPLIFY_THRESHOLD: 900,     // Threshold to trigger block merging
   
   // Memory cleanup intervals (milliseconds)
   CLEANUP_INTERVAL_NORMAL: 30000,    // 30 seconds in normal operation
