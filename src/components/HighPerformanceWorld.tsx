@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef, Suspense } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { Sky, PointerLockControls } from '@react-three/drei';
+import { PointerLockControls, Sky } from '@react-three/drei';
 import { OptimizedWorldGenerator } from '../utils/optimizedWorldGenerator';
 import { PlayerController } from './PlayerController';
 import { ChunkLOD } from './ChunkLOD';
@@ -177,7 +177,7 @@ const useChunkWorker = () => {
 
 // Adaptive performance based on device capabilities with more aggressive thresholds
 const useAdaptivePerformance = () => {
-  const [renderDistance, setRenderDistance] = useState(Math.min(RENDER_DISTANCE, 4)); // Start with lower render distance
+  const [renderDistance, setRenderDistance] = useState(2); // Emergency: start with minimal distance
   const frameTimeRef = useRef<number[]>([]);
   const frameCount = useRef(0);
   const performanceLevel = useRef(0);
@@ -255,7 +255,7 @@ const useBlockSelection = (playerPosition: [number, number, number]) => {
 };
 */
 
-// Enhanced chunk visibility with geometry budget management
+// Enhanced chunk visibility with geometry budget management and emergency shutdown
 const useChunkVisibility = (
   playerPosition: [number, number, number],
   chunks: Map<string, Chunk>,
@@ -265,10 +265,24 @@ const useChunkVisibility = (
   const frustum = useMemo(() => new THREE.Frustum(), []);
   const projScreenMatrix = useMemo(() => new THREE.Matrix4(), []);
   const geometryBudget = useRef(0);
-  const maxGeometryBudget = 15000; // Reduced from 30000 to be more aggressive
+  const maxGeometryBudget = 3000; // Extreme reduction from 15000
+  const emergencyMode = useRef(false);
   
-  // Calculate visible chunks based on frustum culling and geometry budget
+  // Get current geometry count from THREE.js
+  const getCurrentGeometryCount = () => {
+    // @ts-ignore - access THREE.js internal geometry tracking
+    return (window as any)._threeGeometryCount || 0;
+  };
+  // Calculate visible chunks based on frustum culling and geometry budget with emergency shutdown
   const visibleChunks = useMemo(() => {
+    // Emergency shutdown: if geometries are too high, return empty array
+    const currentGeometryCount = getCurrentGeometryCount();
+    if (currentGeometryCount > maxGeometryBudget * 2) {
+      console.error(`🚨 EMERGENCY SHUTDOWN: Geometry count ${currentGeometryCount} exceeded emergency limit, stopping chunk rendering`);
+      emergencyMode.current = true;
+      return [];
+    }
+    
     // Update frustum from camera
     camera.updateMatrixWorld();
     projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -279,6 +293,9 @@ const useChunkVisibility = (
     const playerChunkZ = Math.floor(playerPosition[2] / CHUNK_SIZE);
     const visible: Chunk[] = [];
     
+    // Emergency chunk limit - never load more than 6 chunks
+    const MAX_CHUNKS = 6;
+    
     // Sort chunks by distance to prioritize closer chunks
     const sortedChunks = Array.from(chunks.entries())
       .map(([id, chunk]) => {
@@ -287,35 +304,69 @@ const useChunkVisibility = (
         const distance = Math.sqrt(dx * dx + dz * dz);
         return { id, chunk, distance };
       })
-      .sort((a, b) => a.distance - b.distance);
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, MAX_CHUNKS); // Hard limit on chunks
     
     geometryBudget.current = 0;
-    
-    // Check each chunk in distance order
+      // Check each chunk in distance order with dynamic budget allocation
     for (const { chunk, distance } of sortedChunks) {
       if (!chunk.isReady) continue;
       
       // Skip chunks outside render distance
       if (distance > renderDistance) continue;
-      
-      // Estimate geometry count for this chunk based on block count and distance
-      const blockCount = chunk.blocks?.length || 0;
+        // Extremely aggressive distance-based geometry estimation
+      const blockCount = Math.min(chunk.blocks?.length || 0, 50); // Drastically reduced cap
       let estimatedGeometry;
       
-      if (distance < 2) {
-        estimatedGeometry = blockCount * 6; // Full detail - all faces
-      } else if (distance < 4) {
-        estimatedGeometry = blockCount * 4; // Medium detail
-      } else if (distance < 8) {
-        estimatedGeometry = blockCount * 2; // Low detail
+      if (distance < 1.5) {
+        estimatedGeometry = Math.min(blockCount * 2, 100); // Drastically reduced
+      } else if (distance < 3) {
+        estimatedGeometry = Math.min(blockCount * 1, 50); // Drastically reduced
+      } else if (distance < 5) {
+        estimatedGeometry = Math.min(blockCount * 0.5, 25); // Drastically reduced
       } else {
-        estimatedGeometry = Math.min(blockCount, 100); // Minimum detail
+        estimatedGeometry = Math.min(blockCount * 0.25, 10); // Almost nothing
       }
+      
+      // Extremely conservative budget allocation
+      let maxAllowedForChunk;
+      if (distance < 2) {
+        maxAllowedForChunk = 100; // Drastically reduced from 500
+      } else if (distance < 4) {
+        maxAllowedForChunk = 50; // Drastically reduced from 200
+      } else {
+        maxAllowedForChunk = 25; // Drastically reduced from 100
+      }
+      
+      estimatedGeometry = Math.min(estimatedGeometry, maxAllowedForChunk);
       
       // Check if adding this chunk would exceed our geometry budget
       if (geometryBudget.current + estimatedGeometry > maxGeometryBudget) {
-        console.warn(`Skipping chunk at ${chunk.x},${chunk.z} - would exceed geometry budget. Current: ${geometryBudget.current}, Adding: ${estimatedGeometry}, Max: ${maxGeometryBudget}`);
-        continue;
+        // For close chunks, try to make room by reducing the budget
+        if (distance < 3 && visible.length > 5) {
+          // Remove some distant chunks to make room for close ones
+          const toRemove = visible.filter(v => {
+            const vDx = v.x - chunk.x;
+            const vDz = v.z - chunk.z;
+            const vDist = Math.sqrt(vDx * vDx + vDz * vDz);
+            return vDist > distance + 2;
+          });
+          
+          if (toRemove.length > 0) {
+            // Remove furthest chunk
+            const furthest = toRemove[toRemove.length - 1];
+            const index = visible.indexOf(furthest);
+            if (index > -1) {
+              visible.splice(index, 1);
+              geometryBudget.current -= Math.min(furthest.blocks?.length || 0, 100);
+            }
+          }
+        }
+        
+        // Check again after potential removal
+        if (geometryBudget.current + estimatedGeometry > maxGeometryBudget) {
+          continue; // Skip this chunk
+        }
       }
       
       // Calculate chunk center for frustum culling
@@ -337,8 +388,7 @@ const useChunkVisibility = (
         geometryBudget.current += estimatedGeometry;
       }
     }
-    
-    console.log(`Rendering ${visible.length} chunks with estimated ${geometryBudget.current} geometries (budget: ${maxGeometryBudget})`);
+      console.log(`🚨 EMERGENCY MODE: Rendering only ${visible.length} chunks (max: ${MAX_CHUNKS}) with estimated ${geometryBudget.current} geometries (budget: ${maxGeometryBudget})`);
     return visible;
   }, [chunks, camera, playerPosition, renderDistance]);
   
@@ -408,10 +458,8 @@ const WorldRenderer: React.FC = () => {  // State for player position and chunks
       <PlayerController
         position={playerPosition}
         onPositionChange={handlePlayerMove}
-      />
-
-      {/* Render all visible chunks using LOD system */}
-      {visibleChunks.map((chunk) => (
+      />      {/* EMERGENCY: Disable chunk rendering completely to test geometry sources */}
+      {false && visibleChunks.map((chunk) => (
         <ChunkLOD
           key={`chunk-${chunk.x}-${chunk.z}`}
           chunk={chunk}
@@ -419,35 +467,119 @@ const WorldRenderer: React.FC = () => {  // State for player position and chunks
           chunkX={chunk.x}
           chunkZ={chunk.z}
         />
-      ))}
-
-      {/* HUD updater - sends data to React context for HUD outside canvas */}
+      ))}      {/* HUD updater with minimal data to test */}
       <HUDUpdater
         setHUDData={setHUDData}
         playerPosition={playerPosition}
         renderDistance={renderDistance}
-        visibleChunks={visibleChunks.length}
-        totalChunks={chunks.size}
+        visibleChunks={0}
+        totalChunks={0}
       />
       
-      {/* Optimized ambient light and directional light */}
+      {/* Basic lighting only */}
       <ambientLight intensity={0.5} />
       <directionalLight 
         position={[100, 100, 100]} 
         intensity={0.8} 
         castShadow={false} 
-      />
-
-      {/* Sky with stars */}
-      <Sky 
-        distance={450000} 
-        sunPosition={[100, 20, 100]} 
-        inclination={0.5}
-        turbidity={10}
-        rayleigh={0.5}
-      />
+      />      {/* Test cube to verify rendering works */}
+      <mesh position={[0, 45, 0]}>
+        <boxGeometry args={[2, 2, 2]} />
+        <meshBasicMaterial color="red" />
+      </mesh>        {/* Debug logger to track geometry count */}
+      <DebugLogger />
+      
+      {/* RE-ENABLE TEST 1: Sky component - CHECK IF THIS CAUSES GEOMETRY EXPLOSION */}
+      <Sky sunPosition={[100, 20, 100]} />
     </>
   );
+};
+
+// Debug logger component to track geometry count in minimal scene
+const DebugLogger: React.FC = () => {
+  const { gl } = useThree();
+  const frameCount = useRef(0);
+  const hasLogged = useRef(false);
+  const geometryHistory = useRef<number[]>([]);
+  
+  // Log immediately on mount
+  useEffect(() => {
+    console.log('🔍 DebugLogger mounted - starting geometry monitoring');
+    console.log('📊 Expected scene: PlayerController + lighting + test cube + HUD = ~3-5 geometries');
+  }, []);
+  
+  useFrame(() => {
+    frameCount.current++;
+    
+    if (!gl || !gl.info) {
+      if (frameCount.current === 60 && !hasLogged.current) {
+        console.warn('⚠️ WebGL renderer or info not available after 60 frames');
+        hasLogged.current = true;
+      }
+      return;
+    }
+    
+    const info = gl.info;
+    const memory = info.memory || {};
+    const render = info.render || {};
+    
+    const geometries = memory.geometries || 0;
+    const textures = memory.textures || 0;
+    const calls = render.calls || 0;
+    const triangles = render.triangles || 0;
+    
+    // Track geometry history
+    geometryHistory.current.push(geometries);
+    if (geometryHistory.current.length > 10) {
+      geometryHistory.current.shift();
+    }
+    
+    // Log immediately on first valid frame
+    if (frameCount.current === 1) {
+      console.log(`🎯 FIRST FRAME: Geometries: ${geometries}, Textures: ${textures}, Calls: ${calls}, Triangles: ${triangles}`);
+    }
+    
+    // Update HUD with geometry count in the page title for easy monitoring
+    if (frameCount.current % 60 === 0) {
+      document.title = `Minecraft Clone - G:${geometries} T:${textures} C:${calls}`;
+    }
+    
+    // Emergency detection: if geometries explode in minimal scene
+    if (geometries > 5000) {
+      console.error(`🚨🚨🚨 CRITICAL: ${geometries} geometries in MINIMAL scene!`);
+      console.error('🔍 This proves the geometry explosion is NOT from:');
+      console.error('   - Chunk rendering (disabled)');
+      console.error('   - Sky component (disabled)');
+      console.error('   - WebGL monitors (disabled)');
+      console.error('🎯 LIKELY CULPRITS:');
+      console.error('   - React Three Fiber internal memory leak');
+      console.error('   - Three.js dispose() not being called properly');
+      console.error('   - Geometry creation in PlayerController/HUDUpdater');
+      console.error('   - WebGL context recreation creating duplicate resources');
+      
+      // Show alert to make it visible
+      setTimeout(() => {
+        alert(`GEOMETRY EXPLOSION: ${geometries} geometries in minimal scene! Check console.`);
+      }, 100);
+    }
+    
+    // Log every 120 frames (roughly every 2 seconds at 60fps)
+    if (frameCount.current % 120 === 0) {
+      const avgGeometries = geometryHistory.current.reduce((sum, val) => sum + val, 0) / geometryHistory.current.length;
+      console.log(`[MINIMAL SCENE] Frame: ${frameCount.current}, Geometries: ${geometries} (avg: ${avgGeometries.toFixed(1)}), Textures: ${textures}, Calls: ${calls}, Triangles: ${triangles}`);
+      
+      // Check for steady growth (memory leak pattern)
+      if (geometryHistory.current.length >= 5) {
+        const first = geometryHistory.current[0];
+        const last = geometryHistory.current[geometryHistory.current.length - 1];
+        if (last > first + 10) {
+          console.warn(`📈 MEMORY LEAK PATTERN: Geometries grew from ${first} to ${last} over ${geometryHistory.current.length} samples`);
+        }
+      }
+    }
+  });
+  
+  return null;
 };
 
 // Loading overlay component
@@ -589,18 +721,18 @@ export const HighPerformanceWorld: React.FC = () => {
             renderDistance={RENDER_DISTANCE} 
             visibleChunks={0}
             totalChunks={0}
-          />
-          <WebGLContextManager 
+          />          {/* EMERGENCY: Disable all monitoring components to isolate geometry source */}
+          {false && <WebGLContextManager 
             setHUDData={setHUDData}
             onContextLost={() => console.log("Main context lost event handled")}
             onContextRestored={() => console.log("Main context restored event handled")}
-          />
-          <MemoryManager />
-          <EnhancedWebGLMonitor 
+          />}
+          {false && <MemoryManager />}
+          {false && <EnhancedWebGLMonitor 
             setHUDData={setHUDData}
             onEmergencyCleanup={(count) => console.log(`Enhanced monitor cleaned ${count} objects`)}
             onPerformanceAlert={(level) => console.warn(`Performance alert: ${level}`)}
-          />
+          />}
           <PointerLockControls />
         </Suspense>
       </Canvas>

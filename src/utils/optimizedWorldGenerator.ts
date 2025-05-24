@@ -6,12 +6,10 @@ export class OptimizedWorldGenerator {
   private heightNoise = createNoise2D();
   private caveNoise = createNoise2D();
   private treeNoise = createNoise2D();
-  private chunkCache = new Map<string, Chunk>();
-  
-  // More aggressive geometry limits
-  private readonly MAX_BLOCKS_PER_CHUNK = 800; // Reduced from default
-  private readonly CAVE_THRESHOLD = 0.5; // Increased to create fewer caves
-  private readonly TREE_THRESHOLD = 0.8; // Increased to create fewer trees
+  private chunkCache = new Map<string, Chunk>();    // Absolutely minimal geometry limits - emergency mode
+  private readonly MAX_BLOCKS_PER_CHUNK = 25; // Emergency reduction from 50
+  private readonly CAVE_THRESHOLD = 0.9; // Virtually no caves
+  private readonly TREE_THRESHOLD = 0.99; // Essentially no trees
   generateChunk(chunkX: number, chunkZ: number): Chunk {
     const cacheKey = this.getChunkKey(chunkX, chunkZ);
     
@@ -26,14 +24,10 @@ export class OptimizedWorldGenerator {
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
         const worldX = chunkX * CHUNK_SIZE + x;
-        const worldZ = chunkZ * CHUNK_SIZE + z;
-
-        // Generate height using noise
-        const heightValue = this.heightNoise(worldX * 0.01, worldZ * 0.01);
-        const height = Math.floor((heightValue + 1) * 16) + 32; // Height between 32-64
-
-        // Generate terrain layers with more aggressive optimization
-        for (let y = 0; y < Math.min(height + 1, WORLD_HEIGHT); y++) {
+        const worldZ = chunkZ * CHUNK_SIZE + z;        // Generate height using noise - extremely limited height variation
+        const heightValue = this.heightNoise(worldX * 0.02, worldZ * 0.02); // Less frequent variation
+        const height = Math.floor((heightValue + 1) * 4) + 40; // Very narrow height range: 40-48        // Generate terrain layers with extreme optimization
+        for (let y = Math.max(35, height - 3); y < Math.min(height + 1, WORLD_HEIGHT); y++) { // Very small vertical range
           // Stop generating if we've hit our block limit
           if (blockCount >= this.MAX_BLOCKS_PER_CHUNK) {
             console.warn(`Chunk ${chunkX},${chunkZ} hit block limit of ${this.MAX_BLOCKS_PER_CHUNK}`);
@@ -41,16 +35,14 @@ export class OptimizedWorldGenerator {
           }
 
           let blockType = 0; // Air
-          
-          // Cave generation (more optimized and less frequent)
+            // Extremely limited cave generation - almost none
           let isCave = false;
-          if (y < height - 2 && y > 5) {
-            // Use lower resolution for caves and higher threshold
+          if (y < height - 1 && y > height - 2 && Math.random() > 0.95) { // Very narrow range, 5% chance only
             const caveValue = this.caveNoise(
-              worldX * 0.04 + Math.floor(y * 0.1) * 0.1,
-              worldZ * 0.04 + Math.floor(y * 0.1) * 0.1
+              worldX * 0.05,
+              worldZ * 0.05 + y * 0.05
             );
-            isCave = caveValue > this.CAVE_THRESHOLD; // More restrictive
+            isCave = caveValue > this.CAVE_THRESHOLD; // Extremely restrictive
           }
 
           if (!isCave && y <= height) {
@@ -73,15 +65,13 @@ export class OptimizedWorldGenerator {
             });
             blockCount++;
           }
-        }
-
-        // Generate trees occasionally with much higher threshold
-        if (height > 40 && blockCount < this.MAX_BLOCKS_PER_CHUNK - 50) { // Leave room for trees
-          const treeValue = this.treeNoise(worldX * 0.1, worldZ * 0.1);
-          if (treeValue > this.TREE_THRESHOLD) { // Much more restrictive
+        }        // Virtually no tree generation
+        if (height > 48 && blockCount < this.MAX_BLOCKS_PER_CHUNK - 10 && Math.random() > 0.99) { // Only 1% chance
+          const treeValue = this.treeNoise(worldX * 0.3, worldZ * 0.3); // Even higher frequency
+          if (treeValue > this.TREE_THRESHOLD) { // Extremely restrictive
             const treeSizeBefore = blockMap.size;
             this.generateTree(blockMap, x, height + 1, z);
-            blockCount += (blockMap.size - treeSizeBefore); // Add tree blocks to count
+            blockCount += (blockMap.size - treeSizeBefore);
           }
         }
         

@@ -6,21 +6,21 @@ import { TextureLoader, NearestFilter, RepeatWrapping } from 'three';
 import type { Block, Chunk } from '../types/game';
 import { BLOCK_TYPES, CHUNK_SIZE } from '../types/game';
 
-// LOD (Level of Detail) settings - More aggressive distance thresholds
+// LOD (Level of Detail) settings - Extremely aggressive distance thresholds
 const LOD_LEVELS = 4;          // Increased number of detail levels
-const LOD_DISTANCES = [        // More aggressive distances for each LOD level
-  20,                          // Level 0 (highest detail) up to 20 units away (reduced from 30)
-  35,                          // Level 1 (medium detail) up to 35 units away (reduced from 60)
-  70,                          // Level 2 (low detail) up to 70 units away (reduced from 150)
-  120                          // Level 3 (minimum detail) up to 120 units away
+const LOD_DISTANCES = [        // Extremely aggressive distances for each LOD level
+  10,                          // Level 0 (highest detail) up to 10 units away (reduced from 20)
+  20,                          // Level 1 (medium detail) up to 20 units away (reduced from 35)
+  35,                          // Level 2 (low detail) up to 35 units away (reduced from 70)
+  60                           // Level 3 (minimum detail) up to 60 units away (reduced from 120)
 ];
 
-// Maximum blocks per LOD level to prevent geometry explosion
+// Maximum blocks per LOD level to prevent geometry explosion - Extreme reduction
 const MAX_BLOCKS_PER_LOD = [
-  1200,  // Level 0: Full detail
-  600,   // Level 1: Half detail
-  300,   // Level 2: Quarter detail
-  150    // Level 3: Minimum detail
+  200,   // Level 0: Extremely reduced from 1200
+  100,   // Level 1: Extremely reduced from 600  
+  50,    // Level 2: Extremely reduced from 300
+  25     // Level 3: Extremely reduced from 150
 ];
 
 // Texture atlas loader with improved caching
@@ -349,7 +349,21 @@ export const ChunkLOD: React.FC<{
         geometry.computeBoundingSphere();
         geometry.computeBoundingBox();
       }
-        return geometry;
+        // Extremely aggressive hard cap: if geometry is too large, replace with empty geometry
+      const MAX_VERTICES = 1000; // Drastically reduced from 10000
+      const MAX_FACES = 500;      // Drastically reduced from 5000
+      const index = geometry.getIndex();
+      if (
+        geometry.getAttribute('position')?.count > MAX_VERTICES ||
+        (index && index.count / 3 > MAX_FACES)
+      ) {
+        console.warn(`ChunkLOD: Geometry for chunk (${chunkX},${chunkZ}) LOD ${lodLevel} exceeded safe limits (${geometry.getAttribute('position')?.count} vertices, ${index ? index.count / 3 : 0} faces), replacing with empty geometry.`);
+        const emptyGeometry = new THREE.BufferGeometry();
+        geometries.current[lodLevel] = emptyGeometry;
+        return emptyGeometry;
+      }
+      
+      return geometry;
     } catch (error) {
       console.error("Error generating geometry:", error);
       const emptyGeometry = new THREE.BufferGeometry();

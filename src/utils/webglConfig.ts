@@ -22,30 +22,31 @@ export const WEBGL_RENDERER_CONFIG = {
 
 // Memory usage limits for voxel-based games
 export const VOXEL_MEMORY_CONFIG = {
-  // Maximum resource counts before action is needed - AGGRESSIVE THRESHOLDS
-  MAX_GEOMETRY_COUNT: 15000,  // Extremely aggressive limit to prevent 20k+ issue
-  MAX_TEXTURE_COUNT: 800,     // Reduced texture limit
-  MAX_RENDER_CALLS: 3000,     // More restrictive draw call limit
-  DANGER_GEOMETRY_COUNT: 12000, // Danger zone at 12k geometries
-  WARNING_GEOMETRY_COUNT: 10000, // Warning at 10k geometries
-  CRITICAL_GEOMETRY_COUNT: 8000, // Critical threshold for emergency actions  
+  // Maximum resource counts before action is needed - EMERGENCY THRESHOLDS
+  MAX_GEOMETRY_COUNT: 3000,   // Emergency reduction to match HighPerformanceWorld budget
+  MAX_TEXTURE_COUNT: 200,     // Drastically reduced texture limit
+  MAX_RENDER_CALLS: 1000,     // Emergency draw call limit
+  DANGER_GEOMETRY_COUNT: 2500, // Danger zone at 2.5k geometries
+  WARNING_GEOMETRY_COUNT: 2000, // Warning at 2k geometries
+  CRITICAL_GEOMETRY_COUNT: 1500, // Critical threshold for emergency actions  
+  
   // Memory spike detection thresholds (percentage increase)
-  MEMORY_SPIKE_THRESHOLD: 15, // Very sensitive spike detection for early warning
+  MEMORY_SPIKE_THRESHOLD: 10, // Even more sensitive spike detection
   
-  // Chunk management to prevent excessive geometry - REDUCED LIMITS
-  MAX_CHUNKS_LOW_END: 6,      // Reduced for low-end devices
-  MAX_CHUNKS_MID_RANGE: 12,   // Reduced for mid-range devices  
-  MAX_CHUNKS_HIGH_END: 20,    // Reduced from 25 to 20 for high-end devices
+  // Chunk management to prevent excessive geometry - EMERGENCY LIMITS
+  MAX_CHUNKS_LOW_END: 3,      // Emergency reduction for low-end devices
+  MAX_CHUNKS_MID_RANGE: 4,    // Emergency reduction for mid-range devices  
+  MAX_CHUNKS_HIGH_END: 6,     // Emergency reduction for high-end devices
   
-  // Dynamic LOD settings to reduce geometry count - MORE AGGRESSIVE
+  // Dynamic LOD settings to reduce geometry count - EMERGENCY AGGRESSIVE
   ENABLE_LOD: true,
-  LOD_DISTANCE_NEAR: 18,      // Reduced full detail distance (was 24)
-  LOD_DISTANCE_MID: 35,       // Reduced medium detail distance (was 48) 
-  LOD_DISTANCE_FAR: 70,       // Reduced low detail distance (was 96)
+  LOD_DISTANCE_NEAR: 10,      // Emergency reduction (was 18)
+  LOD_DISTANCE_MID: 20,       // Emergency reduction (was 35) 
+  LOD_DISTANCE_FAR: 35,       // Emergency reduction (was 70)
   
-  // Maximum geometry per chunk to prevent excessive detail - STRICTER LIMITS
-  MAX_GEOMETRY_PER_CHUNK: 800, // Reduced from 1200 to 800
-  SIMPLIFY_THRESHOLD: 600,     // Reduced threshold to trigger block merging earlier
+  // Maximum geometry per chunk to prevent excessive detail - EMERGENCY LIMITS
+  MAX_GEOMETRY_PER_CHUNK: 100, // Emergency reduction from 800
+  SIMPLIFY_THRESHOLD: 50,      // Emergency threshold for block merging
     // Memory cleanup intervals (milliseconds) - FASTER RESPONSE
   CLEANUP_INTERVAL_NORMAL: 15000,    // 15 seconds in normal operation (was 30)
   CLEANUP_INTERVAL_WARNING: 5000,   // 5 seconds when memory pressure detected (was 10)
