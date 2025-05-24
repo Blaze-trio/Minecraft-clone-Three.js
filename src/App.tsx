@@ -9,6 +9,8 @@ import { TrulyMinimalScene } from './components/TrulyMinimalScene';
 import { AbsoluteMinimalScene } from './components/AbsoluteMinimalScene';
 import { ControlledGeometryTest } from './components/ControlledGeometryTest';
 import { RealComponentTest } from './components/RealComponentTest';
+import { IsolatedGeometryTest } from './components/IsolatedGeometryTest';
+import { FinalVerificationTest } from './components/FinalVerificationTest';
 import './App.css';
 
 // Added debug logging
@@ -309,7 +311,7 @@ function App() {
         <CleanGeneratorTest />
       </div>
       <GameErrorBoundary>
-        <RealComponentTest />
+        <FinalVerificationTest />
       </GameErrorBoundary>
     </div>
   );

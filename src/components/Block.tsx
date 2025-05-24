@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { useLoader } from '@react-three/fiber';
 import { TextureLoader, NearestFilter, RepeatWrapping } from 'three';
 import type { Block as BlockType } from '../types/game';
@@ -23,8 +23,7 @@ export const Block: React.FC<BlockProps> = ({ block }) => {
     texture.minFilter = NearestFilter;
     texture.wrapS = RepeatWrapping;
     texture.wrapT = RepeatWrapping;
-  });
-  const materials = useMemo(() => [
+  });  const materials = useMemo(() => [
     <meshLambertMaterial key="right" map={textures[1]} />, // Right
     <meshLambertMaterial key="left" map={textures[1]} />, // Left
     <meshLambertMaterial key="top" map={textures[0]} />, // Top
@@ -81,9 +80,18 @@ export const ChunkComponent: React.FC<ChunkProps> = ({ blocks, chunkKey = '' }) 
         hasNeighbor(0, -1, 0) &&
         hasNeighbor(0, 0, 1) &&
         hasNeighbor(0, 0, -1)
-      );
-    });
+      );    });
   }, [blocks]);
+
+  // Add debugging for chunk rendering
+  useEffect(() => {
+    console.log(`🔍 ChunkComponent: ${blocks.length} input blocks -> ${visibleBlocks.length} visible blocks`);
+    if (blocks.length !== visibleBlocks.length) {
+      console.log('🔍 Culled blocks:', blocks.length - visibleBlocks.length);
+      console.log('🔍 Block positions:', blocks.map(b => `(${b.x},${b.y},${b.z})`));
+      console.log('🔍 Visible positions:', visibleBlocks.map(b => `(${b.x},${b.y},${b.z})`));
+    }
+  }, [blocks.length, visibleBlocks.length, blocks, visibleBlocks]);
 
   return (
     <group>

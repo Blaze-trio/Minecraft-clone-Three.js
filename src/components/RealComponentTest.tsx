@@ -60,6 +60,24 @@ const SingleBlock: React.FC<{ enabled: boolean }> = ({ enabled }) => {
   );
 };
 
+// Direct blocks test (bypass ChunkComponent entirely)
+const DirectBlocks: React.FC<{ enabled: boolean }> = ({ enabled }) => {
+  if (!enabled) return null;
+  
+  const blocks = [];
+  for (let i = 0; i < 8; i++) {
+    blocks.push(
+      <mesh key={i} position={[i * 2, 0, 0]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshLambertMaterial color="#8B4513" />
+      </mesh>
+    );
+  }
+  
+  console.log(`🔧 DirectBlocks: Created ${blocks.length} direct mesh components`);
+  return <group>{blocks}</group>;
+};
+
 // Small chunk test (2x2x2 = 8 blocks) - NO CULLING VERSION
 const SmallChunk: React.FC<{ enabled: boolean; useOptimized: boolean }> = ({ enabled, useOptimized }) => {
   const [chunk, setChunk] = useState<Chunk | null>(null);
@@ -70,33 +88,34 @@ const SmallChunk: React.FC<{ enabled: boolean; useOptimized: boolean }> = ({ ena
       return;
     }
     
-    // Create a minimal 2x2x2 chunk with separation (no occlusion culling)
+    // Create a minimal 2x2x2 chunk with MAXIMUM separation (no occlusion culling)
     const blocks = [];
     for (let x = 0; x < 2; x++) {
       for (let y = 0; y < 2; y++) {
         for (let z = 0; z < 2; z++) {
           blocks.push({
-            x: x * 3, // Separate blocks so no culling happens
-            y: y * 3,
-            z: z * 3,
+            x: x * 10, // Separate blocks by 10 units so no culling happens
+            y: y * 10,
+            z: z * 10,
             type: 1 // dirt
           });
         }
       }
     }
     
-    console.log(`🔧 SmallChunk created with ${blocks.length} blocks (separated to avoid culling)`);
-      setChunk({
+    console.log(`🔧 SmallChunk created with ${blocks.length} blocks (separated by 10 units to avoid culling)`);
+    setChunk({
       x: 0,
       z: 0,
       blocks: blocks,
       isReady: true
     });
-  }, [enabled]);
+  }, [enabled, useOptimized]); // Add useOptimized dependency
   
   if (!chunk) return null;
   
   if (useOptimized) {
+    console.log(`🎯 Rendering OptimizedChunk with ${chunk.blocks.length} input blocks`);
     return <OptimizedChunk chunk={chunk} chunkX={0} chunkZ={0} />;
   } else {
     // Use ChunkComponent but log what it's doing
@@ -109,6 +128,7 @@ export const RealComponentTest: React.FC = () => {
   // Component states
   const [enablePlayer, setEnablePlayer] = useState(false);
   const [enableSingleBlock, setEnableSingleBlock] = useState(false);
+  const [enableDirectBlocks, setEnableDirectBlocks] = useState(false);
   const [enableSmallChunk, setEnableSmallChunk] = useState(false);
   const [useOptimizedChunk, setUseOptimizedChunk] = useState(false);
   const [enableControls, setEnableControls] = useState(false);
@@ -212,6 +232,20 @@ export const RealComponentTest: React.FC = () => {
               Single Block (expected: +1 geometry)
             </span>
           </label>
+            <label style={{ display: 'block', marginBottom: '8px', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={enableDirectBlocks} 
+              onChange={(e) => {
+                setEnableDirectBlocks(e.target.checked);
+                if (e.target.checked) addCheckpoint('DirectBlocks 8 meshes');
+              }}
+              style={{ marginRight: '8px' }}
+            />
+            <span style={{color: enableDirectBlocks ? '#4CAF50' : '#ccc'}}>
+              Direct Blocks 8 meshes (expected: +8 geometries, bypass culling)
+            </span>
+          </label>
           
           <label style={{ display: 'block', marginBottom: '8px', cursor: 'pointer' }}>
             <input 
@@ -310,6 +344,8 @@ export const RealComponentTest: React.FC = () => {
         )}
         
         {enableSingleBlock && <SingleBlock enabled={true} />}
+        
+        {enableDirectBlocks && <DirectBlocks enabled={true} />}
         
         {enableSmallChunk && (
           <SmallChunk enabled={true} useOptimized={useOptimizedChunk} />

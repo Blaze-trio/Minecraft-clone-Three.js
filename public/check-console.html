@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Console Debug Check</title>
+</head>
+<body>
+    <h1>Console Debug Check</h1>
+    <p>Check the browser console for debugging output from the main app.</p>
+    <p>The main app should be running at <a href="http://localhost:5177/" target="_blank">http://localhost:5177/</a></p>
+    
+    <div id="status">Waiting for updates...</div>
+    
+    <script>
+        // Simple script to monitor if we're getting debug output
+        console.log("🔧 Debug check page loaded");
+        
+        // Try to connect to the main app window
+        let mainWindow = null;
+        
+        function checkMainApp() {
+            try {
+                if (window.opener) {
+                    console.log("Found opener window");
+                } else {
+                    console.log("No opener window found");
+                }
+            } catch (e) {
+                console.log("Error accessing opener:", e.message);
+            }
+        }
+        
+        checkMainApp();
+        
+        // Log every 5 seconds to show we're active
+        setInterval(() => {
+            document.getElementById('status').textContent = `Debug check active at ${new Date().toLocaleTimeString()}`;
+            console.log("🔧 Debug check still active");
+        }, 5000);
+    </script>
+</body>
+</html>
